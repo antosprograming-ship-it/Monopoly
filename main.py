@@ -37,7 +37,7 @@ def play(player):
     print(f"\n Rolling the dice: {d1} and {d2} (Total: {total_steps}) \n")
 
     if is_double:
-        print(f"⚡ DOUBLE! {player['name']} have extra roll!")
+        print(f"⚡ DOUBLE! {player['name']} has extra roll!")
 
     new_position = engine.move_player(player, total_steps)
     current_field = board[new_position]

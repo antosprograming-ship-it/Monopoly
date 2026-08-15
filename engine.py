@@ -47,11 +47,11 @@ def handle_property(player, field):
         print(f"{field['name']} is for sale for ${field['price']}!")
         should_buy = False
 
-        # Obsułga decyzji (Człowiek vs Komputer)
+        # Obsługa decyzji (Człowiek vs Komputer)
         if player["name"] == "Computer":
             should_buy = (
                 player["budget"] >= field["price"]
-            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, póżniej to zmienię
+            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, później to zmienię
         else:
             while True:
                 want_buy = (
@@ -111,7 +111,7 @@ def handle_station(player, field):
         if player["name"] == "Computer":
             should_buy = (
                 player["budget"] >= field["price"]
-            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, póżniej to zmienię
+            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, później to zmienię
         else:
             while True:
                 want_buy = (
@@ -133,7 +133,9 @@ def handle_station(player, field):
                 player["properties"].append(field)
                 print(f"{player['name']} bought {field['name']} for ${field['price']}!")
             else:
-                print(f"{player['name']} does not have enough money!")
+                print(
+                    f"{player['name']} does not have enough money to buy {field['name']}!"
+                )
 
 
 def handle_company(player, field, total_steps):
@@ -168,7 +170,7 @@ def handle_company(player, field, total_steps):
         if player["name"] == "Computer":
             should_buy = (
                 player["budget"] >= field["price"]
-            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, póżniej to zmienię
+            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, później to zmienię
         else:
             while True:
                 want_buy = (
@@ -192,7 +194,9 @@ def handle_company(player, field, total_steps):
                     f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
                 )
             else:
-                print(f"❌ {player['name']} does not have enough money!")
+                print(
+                    f"{player['name']} does not have enough money to buy {field['name']}!"
+                )
 
 
 def handle_tax(player, field):
@@ -204,14 +208,14 @@ def handle_tax(player, field):
     )
 
 
+def handle_go_to_jail(player):
+    print(f"Not supported yet.")
+
+
 # ==================================================
 
 # Logika kart szansy i kasa społeczna
 # ==================================================
-
-
-def handle_go_to_jail(player):
-    print("Mechanics of 'handle_go_to_jail' is not supported yet.\n")
 
 
 def handle_card_bank_money(player, card):
@@ -226,15 +230,15 @@ def handle_chance_pay_players(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
-def handle_cart_move_to_field(player, card):
-    print(f"Action type '{card['action_type']}' is not supported yet.\n")
-
-
-def handle_card_go_to_jail(player, card):
+def handle_card_move_to_field(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
 def handle_card_keep_jail_card(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_card_go_to_jail(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
@@ -265,28 +269,28 @@ def handle_chance(player, field):
 
     # 2. Dyspozytor akcji
     match card["action_type"]:
-        case "bank_money":  #
+        case "bank_money":
             handle_card_bank_money(player, card)
 
-        case "move_relative":  #
+        case "move_relative":
             handle_chance_move_relative(player, card)
 
-        case "pay_players":  #
+        case "pay_players":
             handle_chance_pay_players(player, card)
 
-        case "move_to_field":  #
-            handle_cart_move_to_field(player, card)
+        case "move_to_field":
+            handle_card_move_to_field(player, card)
 
-        case "keep_jail_card":  #
+        case "keep_jail_card":
             handle_card_keep_jail_card(player, card)
 
-        case "go_to_jail":  #
+        case "go_to_jail":
             handle_card_go_to_jail(player, card)
 
-        case "nearest_station":  #
+        case "nearest_station":
             handle_chance_nearest_station(player, card)
 
-        case "nearest_utility":  #
+        case "nearest_utility":
             handle_chance_nearest_utility(player, card)
 
         case "property_repairs":
@@ -303,10 +307,10 @@ def handle_community_chest(player, field):
 
     match card["action_type"]:
         case "bank_money":
-            handle_card_bank_money(player, card)  #
+            handle_card_bank_money(player, card)
 
         case "go_to_jail":
-            handle_card_go_to_jail(player, card)(player, card)  #
+            handle_card_go_to_jail(player, card)
 
         case "keep_jail_card":
             handle_card_keep_jail_card(player, card)
@@ -315,7 +319,7 @@ def handle_community_chest(player, field):
             handle_card_property_repairs(player, card)
 
         case "move_to_field":
-            handle_cart_move_to_field(player, card)
+            handle_card_move_to_field(player, card)
 
         case "collect_from_players":
             handle_community_chest_collect_from_players(player, card)

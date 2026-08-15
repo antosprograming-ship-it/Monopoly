@@ -32,7 +32,7 @@ def handle_property(player, field):
     elif owner is not None:
         rent = field.get("base_rent")
         print(
-            f" {player['name']} landed on {owner['name']}'s property and paid ${rent} rent!"
+            f"{player['name']} landed on {owner['name']}'s property and paid ${rent} rent!"
         )
 
         player["budget"] -= rent
@@ -93,8 +93,8 @@ def handle_station(player, field):
         else:
             rent = 0
 
-        print(f" {player['name']} landed on {owner['name']}'s station!")
-        print(f" {owner['name']} owns {station_count} station(s). Rent is ${rent}!")
+        print(f"{player['name']} landed on {owner['name']}'s station!")
+        print(f"{owner['name']} owns {station_count} station(s). Rent is ${rent}!")
 
         player["budget"] -= rent
         owner["budget"] += rent
@@ -125,11 +125,9 @@ def handle_station(player, field):
                 player["budget"] -= field["price"]
                 field["owner"] = player
                 player["properties"].append(field)
-                print(
-                    f" {player['name']} bought {field['name']} for ${field['price']}!"
-                )
+                print(f"{player['name']} bought {field['name']} for ${field['price']}!")
             else:
-                print(f" {player['name']} does not have enough money!")
+                print(f"{player['name']} does not have enough money!")
 
 
 def handle_company(player, field):
@@ -141,7 +139,7 @@ def handle_tax(player, field):
 
     player["budget"] -= tax_amount
     print(
-        f" {player['name']} paid tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}"
+        f"{player['name']} paid tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}\n"
     )
 
 
@@ -191,6 +189,7 @@ def handle_chance(player, field):
     chance_cards.append(card)
 
     print(f"\n {player['name']} draws a Chance card: ")
+    print()
     print(f"  \"{card['text']}\"\n")
 
     # 2. Dyspozytor akcji

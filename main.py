@@ -2,12 +2,22 @@ import engine
 import models
 from board import board
 
+RULES_TEXT = """
+=== COMMANDS / RULES ===
+Type (play)  - to start game
+Type (c)     - to roll dice and continue
+Type (I)   - for your status
+Type (com)   - for computer status
+Type (rules) - to display rules
+========================
+"""
+
 
 def print_player_status(player):
     current_position = player["position_index"]
     current_field_name = board[current_position]["name"]
 
-    print(f"\n=== PLAYER STATUS: {player['name']} ===")
+    print(f"=== PLAYER STATUS: {player['name']} ===")
     print(f"Position: {current_field_name} (Field: #{current_position})")
     print(f"Budget: ${player['budget']}")
 
@@ -21,14 +31,13 @@ def print_player_status(player):
 
 def play(player):
     roll_result = engine.roll_dice()
-    print()
     print(f"Rolling the dice: {roll_result}\n")
 
     new_position = engine.move_player(player, roll_result)
     current_field = board[new_position]
 
     print(
-        f"{player['name']} stood on: {current_field['name']} (Field: #{new_position})\n"
+        f"{player['name']} stood on: {current_field['name']} (Field: #{new_position})"
     )
     engine.handle_field_action(player, current_field)
 
@@ -38,24 +47,34 @@ def play(player):
 def main():
     current_player = models.player1
     is_first_turn = True
-    print("Rules: \n")
+
+    print(RULES_TEXT)
 
     while True:
-        prompt = (
-            "Type (play) to start, or (check) to view status: "
-            if is_first_turn
-            else "Type (c) to continue, or (check) to view status: "
-        )
         print()
-        user_input = input(prompt).strip().lower()
+        user_input = input("Type command: ").strip().lower()
+        print()
 
-        if user_input == "check":
-            print_player_status(current_player)
-        elif user_input in ["play", "c"]:
+        if user_input == "i":
+            print_player_status(models.player1)
+
+        elif user_input == "com":
+            print_player_status(models.player2)
+
+        elif user_input == "rules":
+            print(RULES_TEXT)
+
+        elif is_first_turn and user_input == "play":
             current_player = play(current_player)
             is_first_turn = False
+
+        elif not is_first_turn and user_input == "c":
+            current_player = play(current_player)
+
         else:
-            expected = "'play' or 'check'" if is_first_turn else "'c' or 'check'"
+            expected = (
+                "'play', 'you' or 'I'" if is_first_turn else "'c', 'you' or 'com'"
+            )
             print(f"Invalid command! Type {expected}.")
 
 

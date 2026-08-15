@@ -5,7 +5,7 @@ from chance_cards import chance_cards
 def roll_dice():
     dice_one = random.randint(1, 6)
     dice_two = random.randint(1, 6)
-    return dice_one + dice_two
+    return dice_one, dice_two
 
 
 def move_player(player, steps):
@@ -118,7 +118,8 @@ def handle_station(player, field):
                 elif want_buy == "not":
                     should_buy = False
                     break
-                print("Invalid input! Choose 'buy' or 'not'.")
+                else:
+                    print("Invalid input! Choose 'buy' or 'not'.")
 
         if should_buy:
             if player["budget"] >= field["price"]:
@@ -130,8 +131,63 @@ def handle_station(player, field):
                 print(f"{player['name']} does not have enough money!")
 
 
-def handle_company(player, field):
-    print("Mechanics of 'handle_company' is not supported yet.")
+def handle_company(player, field, total_steps):
+    owner = field.get("owner")
+
+    # WARUNEK 1: Twoja własność
+    if owner == player:
+        print(f"⚡ {player['name']} stood on their own company: {field['name']}.")
+
+    # WARUNEK 2: Firma przeciwnika (płacenie czynszu)
+    elif owner is not None:
+        company_count = 0
+        for c in owner["properties"]:
+            if c["type"] == "company":
+                company_count += 1
+        rent = 0
+        if company_count == 1:
+            rent = total_steps * 4
+        elif company_count == 2:
+            rent = total_steps * 10
+
+        print(f"💸 {player['name']} landed on {owner['name']}'s company!")
+        print(f"{owner['name']} owns {company_count} company(s). Rent is ${rent}!")
+
+        player["budget"] -= rent
+        owner["budget"] += rent
+    # WARUNEK 3: Firma na sprzedaż
+    else:
+        print(f"💡{field['name']} is for sale for ${field['price']}!")
+        should_buy = False
+
+        if player["name"] == "Computer":
+            should_buy = (
+                player["budget"] >= field["price"]
+            )  # Wstępna logika komputer zawsze kupuje jak ma hajs, póżniej to zmienię
+        else:
+            while True:
+                want_buy = (
+                    input("Type (buy) to purchase, (not) to pass: ").strip().lower()
+                )
+                if want_buy == "buy":
+                    should_buy = True
+                    break
+                elif want_buy == "not":
+                    should_buy = False
+                    break
+                else:
+                    print("Invalid input! Choose 'buy' or 'not'.")
+
+        if should_buy:
+            if player["budget"] >= field["price"]:
+                player["budget"] -= field["price"]
+                field["owner"] = player
+                player["properties"].append(field)
+                print(
+                    f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
+                )
+            else:
+                print(f"❌ {player['name']} does not have enough money!")
 
 
 def handle_tax(player, field):
@@ -225,7 +281,7 @@ def handle_community_chest(player, field):
     print("Mechanics of 'handle_community_chest' is not supported yet.")
 
 
-def handle_field_action(player, field):
+def handle_field_action(player, field, total_steps):
     field_type = field["type"]
 
     match field_type:
@@ -242,7 +298,7 @@ def handle_field_action(player, field):
         case "station":
             handle_station(player, field)
         case "company":
-            handle_company(player, field)
+            handle_company(player, field, total_steps)
         case "start" | "jail" | "parking":
             print(
                 f"{player['name']} stood on {field['name']}, there is no action on this field"

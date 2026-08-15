@@ -30,18 +30,27 @@ def print_player_status(player):
 
 
 def play(player):
-    roll_result = engine.roll_dice()
-    print(f"Rolling the dice: {roll_result}\n")
+    d1, d2 = engine.roll_dice()
+    total_steps = d1 + d2
+    is_double = d1 == d2
 
-    new_position = engine.move_player(player, roll_result)
+    print(f"\n Rolling the dice: {d1} and {d2} (Total: {total_steps}) \n")
+
+    if is_double:
+        print(f"⚡ DOUBLE! {player['name']} have extra roll!")
+
+    new_position = engine.move_player(player, total_steps)
     current_field = board[new_position]
 
     print(
         f"{player['name']} stood on: {current_field['name']} (Field: #{new_position})"
     )
-    engine.handle_field_action(player, current_field)
+    engine.handle_field_action(player, current_field, total_steps)
 
-    return models.player2 if player == models.player1 else models.player1
+    if is_double:
+        return player
+    else:
+        return models.player2 if player == models.player1 else models.player1
 
 
 def main():

@@ -1,27 +1,32 @@
 import random
 from chance_cards import chance_cards
+from community_chest_cards import community_chest_cards
 
 
+# Rzut kostką
 def roll_dice():
     dice_one = random.randint(1, 6)
     dice_two = random.randint(1, 6)
     return dice_one, dice_two
 
 
+# Ruszanie graczy po planszy
 def move_player(player, steps):
     BOARD_SIZE = 40
     old_position = player["position_index"]
-    new_positon = (old_position + steps) % BOARD_SIZE
-    player["position_index"] = new_positon
+    new_position = (old_position + steps) % BOARD_SIZE
+    player["position_index"] = new_position
 
     # Jeśli nowa pozycja jest mniejsza niż stara, gracz przekroczył Start
-    if new_positon < old_position and steps > 0:
+    if new_position < old_position and steps > 0:
         player["budget"] += 200
         print(f"💰 {player['name']} passed START and collected $200!")
 
-    return new_positon
+    return new_position
 
 
+# Logika pól
+# ==================================================
 def handle_property(player, field):
     owner = field.get("owner")
 
@@ -199,11 +204,17 @@ def handle_tax(player, field):
     )
 
 
+# ==================================================
+
+# Logika kart szansy i kasa społeczna
+# ==================================================
+
+
 def handle_go_to_jail(player):
     print("Mechanics of 'handle_go_to_jail' is not supported yet.\n")
 
 
-def handle_chance_bank_money(player, card):
+def handle_card_bank_money(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
@@ -215,15 +226,15 @@ def handle_chance_pay_players(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
-def handle_chance_move_to_field(player, card):
+def handle_cart_move_to_field(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
-def handle_chance_keep_jail_card(player, card):
+def handle_card_go_to_jail(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
-def handle_chance_go_to_jail(player, card):
+def handle_card_keep_jail_card(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
@@ -235,7 +246,11 @@ def handle_chance_nearest_utility(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
-def handle_chance_property_repairs(player, card):
+def handle_card_property_repairs(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_community_chest_collect_from_players(player, card):
     print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
@@ -251,7 +266,7 @@ def handle_chance(player, field):
     # 2. Dyspozytor akcji
     match card["action_type"]:
         case "bank_money":  #
-            handle_chance_bank_money(player, card)
+            handle_card_bank_money(player, card)
 
         case "move_relative":  #
             handle_chance_move_relative(player, card)
@@ -260,25 +275,53 @@ def handle_chance(player, field):
             handle_chance_pay_players(player, card)
 
         case "move_to_field":  #
-            handle_chance_move_to_field(player, card)
+            handle_cart_move_to_field(player, card)
 
         case "keep_jail_card":  #
-            handle_chance_keep_jail_card(player, card)
+            handle_card_keep_jail_card(player, card)
 
         case "go_to_jail":  #
-            handle_chance_go_to_jail(player, card)
+            handle_card_go_to_jail(player, card)
 
         case "nearest_station":  #
             handle_chance_nearest_station(player, card)
 
         case "nearest_utility":  #
             handle_chance_nearest_utility(player, card)
+
         case "property_repairs":
-            handle_chance_property_repairs(player, card)
+            handle_card_property_repairs(player, card)
 
 
 def handle_community_chest(player, field):
-    print("Mechanics of 'handle_community_chest' is not supported yet.")
+    card = community_chest_cards.pop(0)
+    community_chest_cards.append(card)
+
+    print(f"\n {player['name']} draws a community chest card: ")
+    print()
+    print(f"  \"{card['text']}\"\n")
+
+    match card["action_type"]:
+        case "bank_money":
+            handle_card_bank_money(player, card)  #
+
+        case "go_to_jail":
+            handle_card_go_to_jail(player, card)(player, card)  #
+
+        case "keep_jail_card":
+            handle_card_keep_jail_card(player, card)
+
+        case "property_repairs":
+            handle_card_property_repairs(player, card)
+
+        case "move_to_field":
+            handle_cart_move_to_field(player, card)
+
+        case "collect_from_players":
+            handle_community_chest_collect_from_players(player, card)
+
+
+# ==================================================
 
 
 def handle_field_action(player, field, total_steps):

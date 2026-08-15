@@ -1,0 +1,98 @@
+[
+  {
+    "id": "chest_tax_refund",
+    "text": "ZWROT PODATKU\nDOCHODOWEGO.\nPOBIERZ $20.",
+    "action_type": "bank_money",
+    "amount": 20
+  },
+  {
+    "id": "chest_go_to_jail",
+    "text": "IDŹ DO WIĘZIENIA. IDZIESZ BEZPOŚREDNIO DO\nWIĘZIENIA, NIE MIJASZ POLA START, NIE POBIERASZ $200.",
+    "action_type": "go_to_jail"
+  },
+  {
+    "id": "chest_life_insurance",
+    "text": "OTRZYMUJESZ WYPŁATĘ\nZ UBEZPIECZENIA NA ŻYCIE.\nPOBIERZ $100.",
+    "action_type": "bank_money",
+    "amount": 100
+  },
+  {
+    "id": "chest_hospital_fee",
+    "text": "OPŁATA ZA POBYT\nW SZPITALU.\nZAPŁAĆ $100.",
+    "action_type": "bank_money",
+    "amount": -100
+  },
+  {
+    "id": "chest_get_out_of_jail",
+    "text": "WYJDŹ BEZPŁATNIE Z WIĘZIENIA. Kartę możesz zachować\ni wykorzystać w razie potrzeby. Może też ją wymienić z innym\ngraczem lub ją odsprzedać innemu graczowi.",
+    "action_type": "keep_jail_card"
+  },
+  {
+    "id": "chest_inherit",
+    "text": "DZIEDZICZYSZ SPADEK\nW WYSOKOŚCI $100.",
+    "action_type": "bank_money",
+    "amount": 100
+  },
+  {
+    "id": "chest_beauty_contest",
+    "text": "ZAJMUJESZ DRUGIE\nMIEJSCE W KONKURSIE\nPIĘKNOŚCI.\nPOBIERZ $10.",
+    "action_type": "bank_money",
+    "amount": 10
+  },
+  {
+    "id": "chest_bank_error",
+    "text": "POMYŁKA BANKU\nNA TWOJĄ KORZYŚĆ.\nPOBIERZ $200.",
+    "action_type": "bank_money",
+    "amount": 200
+  },
+  {
+    "id": "chest_tuition_fee",
+    "text": "OPŁATA ZA CZESNE.\nZAPŁAĆ $50.",
+    "action_type": "bank_money",
+    "amount": -50
+  },
+  {
+    "id": "chest_stock_sale",
+    "text": "SPRZEDAJESZ\nAKCJE Z ZYSKIEM.\nPOBIERZ $50.",
+    "action_type": "bank_money",
+    "amount": 50
+  },
+  {
+    "id": "chest_street_repairs",
+    "text": "OBLICZONO KOSZT NAPRAW\nKOMUNALNYCH TWOICH\nNIERUCHOMOŚCI;\nZAPŁAĆ $40 ZA KAŻDY\nDOM ORAZ\n$115 ZA KAŻDY HOTEL,\nJAKI POSIADASZ.",
+    "action_type": "property_repairs",
+    "house_cost": 40,
+    "hotel_cost": 115
+  },
+  {
+    "id": "chest_birthday",
+    "text": "DZIŚ SĄ TWOJE URODZINY.\nPOBIERZ $10 OD\nKAŻDEGO Z GRACZY.",
+    "action_type": "collect_from_players",
+    "amount": 10
+  },
+  {
+    "id": "chest_go_to_start",
+    "text": "IDŹ NA POLE START.\nPOBIERZ $200.",
+    "action_type": "move_to_field",
+    "target_id": "start",
+    "collect_start": true
+  },
+  {
+    "id": "chest_doctor_fee",
+    "text": "OPŁATA ZA KONSULTACJĘ\nLEKARSKĄ.\nZAPŁAĆ $50.",
+    "action_type": "bank_money",
+    "amount": -50
+  },
+  {
+    "id": "chest_consulting_fee",
+    "text": "POBIERZ $25\nZA USŁUGĘ\nKONSULTINGOWĄ.",
+    "action_type": "bank_money",
+    "amount": 25
+  },
+  {
+    "id": "chest_holiday_fund",
+    "text": "OTRZYMUJESZ WYPŁATĘ\nZ FUNDUSZU WAKACYJNEGO.\nPOBIERZ $100.",
+    "action_type": "bank_money",
+    "amount": 100
+  }
+]

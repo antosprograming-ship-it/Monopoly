@@ -81,9 +81,7 @@ def main():
             current_player = play(current_player)
 
         else:
-            expected = (
-                "'play', 'you' or 'I'" if is_first_turn else "'c', 'you' or 'com'"
-            )
+            expected = "'play', 'i' or 'com'" if is_first_turn else "'c', 'i' or 'com'"
             print(f"Invalid command! Type {expected}.")
 
 

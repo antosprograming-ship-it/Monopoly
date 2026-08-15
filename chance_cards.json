@@ -1,0 +1,96 @@
+[
+  {
+    "id": "chance_speeding_fine",
+    "text": "Mandat za przekroczenie\n prędkości.\n Wpłać do Banku $15.",
+    "action_type": "bank_money",
+    "amount": -15
+  },
+  {
+    "id": "chance_go_to_aleje_ujazdowskie",
+    "text": "Idź na Aleje\n Ujazdowskie.",
+    "action_type": "move_to_field",
+    "target_id": "aleje_ujazdowskie",
+    "collect_start": true
+  },
+  {
+    "id": "chance_building_loan",
+    "text": "Otrzymujesz spłatę\n kredytu budowlanego.\n Pobierz $150.",
+    "action_type": "bank_money",
+    "amount": 150
+  },
+  {
+    "id": "chance_go_back_3",
+    "text": "Cofnij się\n o trzy pola.",
+    "action_type": "move_relative",
+    "steps": -3
+  },
+  {
+    "id": "chance_go_to_jail",
+    "text": "Idź do więzienia. Idziesz bezpośrednio do\n więzienia. Nie mijasz pola Start, nie pobierasz $200.",
+    "action_type": "go_to_jail"
+  },
+  {
+    "id": "chance_go_to_plowiecka",
+    "text": "Idź na Ulicę Płowiecką\n jeżeli miniesz pole\n Start, pobierz $200.",
+    "action_type": "move_to_field",
+    "target_id": "ulica_plowiecka",
+    "collect_start": true
+  },
+  {
+    "id": "chance_nearest_station_1",
+    "text": "Idź na najbliższe pole\n Dworzec Kolejowy. Jeżeli pole NIE MA\n WŁAŚCICIELA, możesz je kupić\n od Banku. Jeżeli pole MA\n WŁAŚCICIELA, zapłać mu\n dwukrotną wysokość czynszu\n należnego za postój na tym polu.",
+    "action_type": "nearest_station",
+    "rent_multiplier": 2
+  },
+  {
+    "id": "chance_nearest_utility",
+    "text": "Idź na najbliższe pole\n Elektrownia lub\n Wodociągi.\n Jeżeli pole NIE MA\n WŁAŚCICIELA, możesz\n je kupić od Banku.\n Jeżeli pole MA\n WŁAŚCICIELA, rzuć\n kostkami i zapłać jego\n właścicielowi równowartość\n 10 x sumy wyrzuconych oczek.",
+    "action_type": "nearest_utility",
+    "dice_multiplier": 10
+  },
+  {
+    "id": "chance_chairman",
+    "text": "Wybrano Cię\n prezesem zarządu.\n Zapłać każdemu\n graczowi $50.",
+    "action_type": "pay_players",
+    "amount": 50
+  },
+  {
+    "id": "chance_go_to_dworzec_zachodni",
+    "text": "Idź na pole\n Dworzec Zachodni.\n Jeżeli miniesz pole\n Start, pobierz $200.",
+    "action_type": "move_to_field",
+    "target_id": "dworzec_zachodni",
+    "collect_start": true
+  },
+  {
+    "id": "chance_nearest_station_2",
+    "text": "Idź na najbliższe pole\n Dworzec Kolejowy.\n Jeżeli pole NIE MA\n WŁAŚCICIELA, możesz je kupić\n od Banku. Jeżeli pole MA\n WŁAŚCICIELA, zapłać mu\n dwukrotną wysokość czynszu\n należnego za postój na tym polu.",
+    "action_type": "nearest_station",
+    "rent_multiplier": 2
+  },
+  {
+    "id": "chance_go_to_plac_wilsona",
+    "text": "Idź na Plac Wilsona.\n Jeżeli miniesz\n pole Start,\n pobierz $200.",
+    "action_type": "move_to_field",
+    "target_id": "plac_wilsona",
+    "collect_start": true
+  },
+  {
+    "id": "chance_get_out_of_jail",
+    "text": "Wyjdź bezpłatnie z więzienia. Kartę możesz zachować\n i wykorzystać w razie potrzeby. Może też ją wymienić z innym\n graczem lub ją odsprzedać innemu graczowi.",
+    "action_type": "keep_jail_card"
+  },
+  {
+    "id": "chance_general_repairs",
+    "text": "Przeprowadzasz\n generalny remont\n wszystkich\n nieruchomości:\n Za każdy dom płacisz $25,\n za każdy hotel\n płacisz $100.",
+    "action_type": "property_repairs",
+    "house_cost": 25,
+    "hotel_cost": 100
+  },
+  {
+    "id": "chance_go_to_start",
+    "text": "Idź na pole Start.\n Pobierz $200.",
+    "action_type": "move_to_field",
+    "target_id": "start",
+    "collect_start": true
+  }
+]

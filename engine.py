@@ -1,4 +1,5 @@
 import random
+from chance_cards import chance_cards
 
 
 def roll_dice():
@@ -9,8 +10,16 @@ def roll_dice():
 
 def move_player(player, steps):
     BOARD_SIZE = 40
-    player["position_index"] = (player["position_index"] + steps) % BOARD_SIZE
-    return player["position_index"]
+    old_position = player["position_index"]
+    new_positon = (old_position + steps) % BOARD_SIZE
+    player["position_index"] = new_positon
+
+    # Jeśli nowa pozycja jest mniejsza niż stara, gracz przekroczył Start
+    if new_positon < old_position and steps > 0:
+        player["budget"] += 200
+        print(f"💰 {player['name']} passed START and collected $200!")
+
+    return new_positon
 
 
 def handle_property(player, field):
@@ -41,7 +50,7 @@ def handle_property(player, field):
         else:
             while True:
                 want_buy = (
-                    input("Type (buy) to purchase, (not) to pass:").strip().lower()
+                    input("\nType (buy) to purchase, (not) to pass: ").strip().lower()
                 )
                 if want_buy == "buy":
                     should_buy = True
@@ -49,7 +58,8 @@ def handle_property(player, field):
                 elif want_buy == "not":
                     should_buy = False
                     break
-            print("Invalid input! Choose 'buy' or 'not'.")
+                else:
+                    print("Invalid input! Choose 'buy' or 'not'.")
 
         if should_buy:
             if player["budget"] >= field["price"]:
@@ -78,7 +88,10 @@ def handle_station(player, field):
 
         rent_levels = field["rent_levels"]
         # Jeśli ma 1 dworzec -> station_count wynosi 1 -> pobieramy indeks 0 (25$)
-        rent = rent_levels[station_count - 1]
+        if station_count > 0:
+            rent = rent_levels[station_count - 1]
+        else:
+            rent = 0
 
         print(f" {player['name']} landed on {owner['name']}'s station!")
         print(f" {owner['name']} owns {station_count} station(s). Rent is ${rent}!")
@@ -87,7 +100,7 @@ def handle_station(player, field):
         owner["budget"] += rent
     # WARUNEK 3: Stacja na sprzedaż
     else:
-        print(f" {field['name']} is for sale for ${field['price']}!")
+        print(f"{field['name']} is for sale for ${field['price']}!")
         should_buy = False
 
         if player["name"] == "Computer":
@@ -103,7 +116,7 @@ def handle_station(player, field):
                     should_buy = True
                     break
                 elif want_buy == "not":
-                    should_buy == False
+                    should_buy = False
                     break
                 print("Invalid input! Choose 'buy' or 'not'.")
 
@@ -120,7 +133,7 @@ def handle_station(player, field):
 
 
 def handle_company(player, field):
-    pass
+    print("Mechanics of 'handle_company' is not supported yet.")
 
 
 def handle_tax(player, field):
@@ -128,20 +141,89 @@ def handle_tax(player, field):
 
     player["budget"] -= tax_amount
     print(
-        f" {player['name']} pay tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}"
+        f" {player['name']} paid tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}"
     )
 
 
 def handle_go_to_jail(player):
-    pass
+    print("Mechanics of 'handle_go_to_jail' is not supported yet.\n")
+
+
+def handle_chance_bank_money(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_move_relative(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_pay_players(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_move_to_field(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_keep_jail_card(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_go_to_jail(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_nearest_station(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_nearest_utility(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
+
+
+def handle_chance_property_repairs(player, card):
+    print(f"Action type '{card['action_type']}' is not supported yet.\n")
 
 
 def handle_chance(player, field):
-    pass
+    # 1. Pobieranie karty z góry talii i odłożenie na spód
+    card = chance_cards.pop(0)
+    chance_cards.append(card)
+
+    print(f"\n {player['name']} draws a Chance card: ")
+    print(f"  \"{card['text']}\"\n")
+
+    # 2. Dyspozytor akcji
+    match card["action_type"]:
+        case "bank_money":  #
+            handle_chance_bank_money(player, card)
+
+        case "move_relative":  #
+            handle_chance_move_relative(player, card)
+
+        case "pay_players":  #
+            handle_chance_pay_players(player, card)
+
+        case "move_to_field":  #
+            handle_chance_move_to_field(player, card)
+
+        case "keep_jail_card":  #
+            handle_chance_keep_jail_card(player, card)
+
+        case "go_to_jail":  #
+            handle_chance_go_to_jail(player, card)
+
+        case "nearest_station":  #
+            handle_chance_nearest_station(player, card)
+
+        case "nearest_utility":  #
+            handle_chance_nearest_utility(player, card)
+        case "property_repairs":
+            handle_chance_property_repairs(player, card)
 
 
 def handle_community_chest(player, field):
-    pass
+    print("Mechanics of 'handle_community_chest' is not supported yet.")
 
 
 def handle_field_action(player, field):
@@ -164,5 +246,5 @@ def handle_field_action(player, field):
             handle_company(player, field)
         case "start" | "jail" | "parking":
             print(
-                f"{player['name']} stood on {field['name']}, ther is no action on this field"
+                f"{player['name']} stood on {field['name']}, there is no action on this field"
             )

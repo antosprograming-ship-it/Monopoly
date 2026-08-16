@@ -8,12 +8,14 @@ JAIL_FINE = 50
 
 RULES_TEXT = """
 === COMMANDS / RULES ===
-Type (play)  - to start game
-Type (c)     - to roll dice and continue
-Type (i)     - for your status
-Type (com)   - for computer status
-Type (rules) - to display rules
-Type (house) - to buy a new house
+Type (play)    - to start game
+Type (c)       - to roll dice and continue
+Type (i)       - for your status
+Type (com)     - for computer status
+Type (rules)   - to display rules
+Type (house)   - to buy a new house
+Type (restart) - to restart the game
+Type (sell)    - to sell house(s) / hotel(s)
 ========================
 """
 
@@ -146,7 +148,7 @@ def play(player):
     dice_total = d1 + d2
     is_double = d1 == d2
 
-    print(f"\n Rolling the dice: {d1} and {d2} (Total: {dice_total}) \n")
+    print(f"\nRolling the dice: {d1} and {d2} (Total: {dice_total}) \n")
 
     # 2. Sprawdzanie serii dubletów
     if is_double:
@@ -257,6 +259,90 @@ def handle_build_menu(player):
                 )
 
 
+def handle_sell_menu(player):
+    while True:
+        # 1. Pobieramy monopole i filtrujemy tylko te grupy, na których stoją budynki
+        monopolies = engine.get_player_monopolies(player)
+        sellable_groups = [
+            group
+            for group in monopolies
+            if any(
+                p.get("group") == group and p.get("houses", 0) > 0
+                for p in player["properties"]
+            )
+        ]
+
+        # 2. Jeśli brak jakichkolwiek budynków na sprzedaż, wychodzimy
+        if not sellable_groups:
+            print(f"❌ {player['name']} does not have any buildings to sell!")
+            return
+
+        # 3. Wyświetlamy TYLKO grupy posiadające budynki
+        print("\n=== CHOOSE COLOR GROUP TO SELL ON ===")
+        for index, group_name in enumerate(sellable_groups, 1):
+            print(f"{index}. {group_name.upper()}")
+
+        group_choice = (
+            input("\nSelect group number (or 'c' to cancel): ").strip().lower()
+        )
+
+        if group_choice == "c":
+            return
+
+        if group_choice.isdigit():
+            group_index = int(group_choice)
+            if 1 <= group_index <= len(sellable_groups):
+                selected_group = sellable_groups[group_index - 1]
+                print(f"✅ Selected group: {selected_group.upper()}")
+            else:
+                print("❌ Invalid number! Choose a number from the list.")
+                continue
+        else:
+            print("❌ Invalid input! Please enter a valid number or 'c' to cancel.")
+            continue
+
+        # 4. Szukamy ulic należących do wybranego koloru
+        group_properties = [
+            field
+            for field in board
+            if field.get("type") == "property" and field.get("group") == selected_group
+        ]
+
+        # 5. Podmenu wyboru konkretnej ulicy
+        while True:
+            print(f"\n=== PROPERTIES IN {selected_group.upper()} ===")
+            for index, prop in enumerate(group_properties, 1):
+                houses = prop.get("houses", 0)
+                status = f"{houses} house(s)" if houses < 5 else "HOTEL (5)"
+                refund = prop["house_cost"] // 2  # Bank oddaje 50% wartości budynku
+                print(
+                    f"{index}. {prop['name']} | Status: {status} | Sell price: ${refund}"
+                )
+
+            prop_choice = (
+                input(
+                    "\nSelect property number to sell from (or type 'b' to go back): "
+                )
+                .strip()
+                .lower()
+            )
+
+            if prop_choice == "b":
+                break
+
+            if prop_choice.isdigit():
+                prop_index = int(prop_choice)
+                if 1 <= prop_index <= len(group_properties):
+                    selected_property = group_properties[prop_index - 1]
+                    engine.sell_house(player, selected_property, models.bank)
+                else:
+                    print("❌ Invalid number! Choose a number from the list.")
+            else:
+                print(
+                    "❌ Invalid input! Please enter a valid number or 'b' to go back."
+                )
+
+
 def main():
     current_player = models.player1
     is_first_turn = True
@@ -286,6 +372,16 @@ def main():
 
         elif user_input == "house":
             handle_build_menu(current_player)
+
+        elif user_input == "restart":
+            engine.reset_game(models.player1, models.player2, models.bank)
+            current_player = models.player1
+            is_first_turn = True
+            print("🔄 Game has been completely restarted!\n")
+            print(RULES_TEXT)
+
+        elif user_input == "sell":
+            handle_sell_menu(player)
 
         else:
             expected = "'play', 'i' or 'com'" if is_first_turn else "'c', 'i' or 'com'"

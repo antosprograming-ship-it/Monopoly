@@ -7,6 +7,33 @@ BOARD_SIZE = 40
 GO_BONUS = 200
 
 
+def reset_game(player1, player2, bank):
+    # 1. Reset stanu graczy
+    for p in [player1, player2]:
+        p["position_index"] = 0
+        p["budget"] = 1500
+        p["properties"] = []
+        p["jail_cards_count"] = 0
+        p["jail_cards_held"] = []
+        p["in_jail"] = False
+        p["jail_turns"] = 0
+        p["double_count"] = 0
+
+    # 2. Reset stanu Banku
+    bank["houses"] = 32
+    bank["hotels"] = 12
+
+    for field in board:
+        if "owner" in field:
+            field["owner"] = None
+        if "houses" in field:
+            field["houses"] = 0
+
+    # 4. Ponowne przetasowanie kart
+    random.shuffle(chance_cards)
+    random.shuffle(community_chest_cards)
+
+
 # Rzut kostką
 def roll_dice():
     d1 = random.randint(1, 6)
@@ -67,9 +94,7 @@ def attempt_purchase(player, field):
             player["budget"] -= field["price"]
             field["owner"] = player  # Przypisujemy obiekt gracza jako właściciela
             player["properties"].append(field)
-            print(
-                f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
-            )
+            print(f"✅ {player['name']} bought {field['name']} for ${field['price']}!")
         else:
             print(
                 f"{player['name']} does not have enough money to buy {field['name']}!"
@@ -171,6 +196,56 @@ def build_house(player, field, bank):
         )
 
 
+def sell_house(player, field, bank):
+    group_name = field["group"]
+    current_houses = field.get("houses", 0)
+
+    # 1. Sprawdzenie, czy na tej konkretnej ulicy w ogóle stoją budynki
+    if current_houses <= 0:
+        print(f"❌ {field['name']} has no buildings to sell!")
+        return
+
+    # 2. Zasada równomiernego sprzedawania (Even Selling Rule)
+    # Szukamy MAKSYMALNEJ liczby budynków w całej grupie kolorystycznej
+    group_props = [
+        f for f in board if f.get("type") == "property" and f.get("group") == group_name
+    ]
+    max_houses = max(f.get("houses", 0) for f in group_props)
+
+    # Sprzedawać można wyłącznie z ulic posiadających najwięcej budynków
+    if current_houses < max_houses:
+        print(
+            f"❌ You must sell evenly! Sell from properties with {max_houses} building(s) in {group_name.upper()} first."
+        )
+        return
+
+    refund = field["house_cost"] // 2
+
+    # 3A. Sprzedaż HOTELU (Zejście z poziomu 5 na 4 domki)
+    if current_houses == 5:
+        # Bank musi posiadać co najmniej 4 wolne domki, aby zamienić hotel z powrotem na 4 domki
+        if bank["houses"] < 4:
+            print(
+                "❌ Bank does not have enough houses (4 required) to downgrade the Hotel!"
+            )
+            return
+
+        field["houses"] = 4
+        bank["hotels"] += 1
+        bank["houses"] -= 4
+        player["budget"] += refund
+        print(
+            f"🏨 {player['name']} sold a HOTEL on {field['name']} for ${refund}! (Replaced with 4 houses)"
+        )
+
+    # 3B. Sprzedaż zwykłego DOMKU (Poziomy 1–4)
+    else:
+        field["houses"] = current_houses - 1
+        bank["houses"] += 1
+        player["budget"] += refund
+        print(f"🏠 {player['name']} sold a house on {field['name']} for ${refund}!")
+
+
 def handle_property(player, field):
     owner = field.get("owner")
 
@@ -222,11 +297,13 @@ def handle_station(player, field, multiplier=1):
     # WARUNEK 2: Stacja przeciwnika (płacenie czynszu)
     elif owner is not None:
         station_count = sum(1 for p in owner["properties"] if p["type"] == "station")
-
         rent_levels = field["rent_levels"]
 
         # Obliczamy czynsz i MNOŻYMY przez multiplier!
-        rent = rent_levels[station_count - 1] * multiplier
+        if station_count > 0:
+            rent = rent_levels[station_count - 1] * multiplier
+        else:
+            rent = 0
 
         print(f"💸 {player['name']} landed on {owner['name']}'s station!")
 
@@ -573,5 +650,5 @@ def handle_field_action(player, field, dice_total, all_players):
             handle_company(player, field, dice_total)
         case "start" | "jail" | "parking":
             print(
-                f"{player['name']} stood on {field['name']}, there is no action on this field"
+                f"{player['name']} stood on: {field['name']}, there is no action on this field"
             )

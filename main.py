@@ -9,6 +9,7 @@ Type (c)     - to roll dice and continue
 Type (i)     - for your status
 Type (com)   - for computer status
 Type (rules) - to display rules
+Type (house) - to buy a new house
 ========================
 """
 
@@ -57,6 +58,83 @@ def play(player):
         return models.player2 if player == models.player1 else models.player1
 
 
+def handle_build_menu(player):
+    # Pętla główna – pozwala wracać z wyboru ulicy do wyboru grupy kolorów
+    while True:
+        # 1. Pobieramy z silnika listę kolorów, na które gracz ma monopol
+        monopolies = engine.get_player_monopolies(player)
+
+        # 2. Jeśli brak monopolu, powiadamiamy i wychodzimy
+        if not monopolies:
+            print(
+                "❌ You don't own any full color groups! Collect all properties of one color to build."
+            )
+            return
+
+        # 3. Wybor grupy kolorów
+        print("\n=== CHOOSE COLOR GROUP TO BUILD ON ===")
+        for index, group_name in enumerate(monopolies, 1):
+            print(f"{index}. {group_name.upper()}")
+
+        group_choice = (
+            input("\nSelect group number (or 'c' to cancel): ").strip().lower()
+        )
+
+        if group_choice == "c":
+            return
+
+        if group_choice.isdigit():
+            group_index = int(group_choice)
+            if 1 <= group_index <= len(monopolies):
+                selected_group = monopolies[group_index - 1]
+                print(f"✅ Selected group: {selected_group.upper()}")
+            else:
+                print("❌ Invalid number! Choose a number from the list.")
+                continue
+        else:
+            print("❌ Invalid input! Please enter a valid number or 'c' to cancel.")
+            continue
+
+        # 4. Szukamy ulic należących do wybranego koloru
+        group_properties = [
+            field
+            for field in board
+            if field.get("type") == "property" and field.get("group") == selected_group
+        ]
+
+        # 5. Podmenu wyboru konkretnej ulicy do rozbudowy
+        while True:
+            print(f"\n=== PROPERTIES IN {selected_group.upper()} ===")
+            for index, prop in enumerate(group_properties, 1):
+                houses = prop.get("houses", 0)
+                status = f"{houses} house(s)" if houses < 5 else "HOTEL (5)"
+                print(
+                    f"{index}. {prop['name']} | Status: {status} | Cost: ${prop['house_cost']}"
+                )
+
+            prop_choice = (
+                input("\nSelect property number to build on (or type 'b' to go back): ")
+                .strip()
+                .lower()
+            )
+
+            if prop_choice == "b":
+                break  # Przerywa podmenu ulic i wraca do pętli głównej (wyboru grupy)
+
+            if prop_choice.isdigit():
+                prop_index = int(prop_choice)
+                # DOWÓD POPRAWKI: Używamy prop_index zamiast prop_choice
+                if 1 <= prop_index <= len(group_properties):
+                    selected_property = group_properties[prop_index - 1]
+                    engine.build_house(player, selected_property, models.bank)
+                else:
+                    print("❌ Invalid number! Choose a number from the list.")
+            else:
+                print(
+                    "❌ Invalid input! Please enter a valid number or 'b' to go back."
+                )
+
+
 def main():
     current_player = models.player1
     is_first_turn = True
@@ -83,6 +161,9 @@ def main():
 
         elif not is_first_turn and user_input == "c":
             current_player = play(current_player)
+
+        elif user_input == "house":
+            handle_build_menu(current_player)
 
         else:
             expected = "'play', 'i' or 'com'" if is_first_turn else "'c', 'i' or 'com'"

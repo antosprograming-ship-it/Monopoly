@@ -53,21 +53,137 @@ def decide_purchase(player, field):
             print("Invalid input! Choose 'buy' or 'not'.")
 
 
+def has_monopoly(player, group_name):
+    # 1. Liczymy, ile w sumie jest ulic w tym kolorze na całej planszy
+    total_in_group = 0
+    for field in board:
+        if field.get("type") == "property" and field.get("group") == group_name:
+            total_in_group += 1
+
+    # 2. Liczymy, ile z tych ulic ma w ekwipunku gracz
+    player_in_group = 0
+    for prop in player["properties"]:
+        if prop.get("group") == group_name:
+            player_in_group += 1
+
+    # 3. Zwracamy True tylko wtedy, gdy gracz ma wszystkie ulice z danego koloru
+    return total_in_group == player_in_group and total_in_group > 0
+
+
+def get_player_monopolies(player):
+    # 1. Zbieramy unikalne grupy kolorów z posiadłości gracza (używamy set, żeby uniknąć duplikatów)
+    player_groups = set()
+    for prop in player["properties"]:
+        group = prop.get("group")
+        if group:
+            player_groups.add(group)
+
+    # 2. Sprawdzamy, na które z tych grup gracz ma pełny monopol
+    monopolies = []
+    for group in player_groups:
+        if has_monopoly(player, group):
+            monopolies.append(group)
+
+    # jeżeli gracz nie ma monopola zwraca [] czyli wartość Fals'ową, jeżeli gracz ma monopol
+    # zwraca jego kolor np. ["red"] albo pare ["red", "green", "pink"]
+    return monopolies
+
+
+def build_house(player, field, bank):
+    group_name = field["group"]
+
+    if not has_monopoly(player, group_name):
+        print(f"❌ {player['name']} does not have a monopoly on {group_name.upper()}!")
+        return
+
+    current_houses = field.get("houses", 0)
+    house_cost = field["house_cost"]
+
+    # 2. Sprawdzenie maksymalnego rozbudowania (Hotel = 5)
+    if current_houses >= 5:
+        print(f"❌ {field['name']} already has a Hotel!")
+        return
+
+    # 3. Zasada równomiernego budowania
+    group_props = [
+        f for f in board if f.get("type") == "property" and f.get("group") == group_name
+    ]
+    min_houses = min(f.get("houses", 0) for f in group_props)
+
+    if current_houses > min_houses:
+        print(
+            f"❌ You must build evenly! Build on other properties in {group_name.upper()} first."
+        )
+        return
+
+    # 4. Sprawdzenie budżetu gracza
+    if player["budget"] < house_cost:
+        print(f"❌ {player['name']} cannot afford a building (${house_cost})!")
+        return
+
+    # 5A. Budowa DOMKU (poziomy 1-4)
+    if current_houses < 4:
+        if bank["houses"] <= 0:
+            print("❌ Bank has no more houses available!")
+            return
+
+        player["budget"] -= house_cost
+        field["houses"] = current_houses + 1
+        bank["houses"] -= 1
+        print(
+            f"🏠 {player['name']} built a house on {field['name']} for ${house_cost}!"
+        )
+
+    # 5B. Transakcja na HOTEL (poziom 5)
+    elif current_houses == 4:
+        if bank["hotels"] <= 0:
+            print("❌ Bank has no more hotels available!")
+            return
+
+        player["budget"] -= house_cost
+        field["houses"] = 5
+        bank["hotels"] -= 1
+        bank["houses"] += 4  # 4 domki wracają do Banku
+        print(
+            f"🏨 {player['name']} built a HOTEL on {field['name']} for ${house_cost}!"
+        )
+
+
 def handle_property(player, field):
     owner = field.get("owner")
 
     # WARUNEK 1: Twoja własność
     if owner is player:
         print(f"🏠 {player['name']} stood on their own property: {field['name']}.")
+
     # WARUNEK 2: Nieruchomość przeciwnika (płacenie czynszu)
     elif owner is not None:
-        rent = field.get("base_rent")
+        houses = field.get("houses", 0)
+
+        # 1. Jeśli na ulicy stoją budynki (1-4 domki lub 5 = hotel)
+        if houses > 0:
+            rent = field["house_rents"][houses - 1]
+            print(
+                f"🏠 {player['name']} landed on {owner['name']}'s property with {houses} building(s)!"
+            )
+
+        # 2. Jeśli nie ma budynków, ale właściciel ma MONOPOL -> Podwójny czynsz
+        elif has_monopoly(owner, field["group"]):
+            rent = field.get("base_rent") * 2
+            print(
+                f"👑 {owner['name']} has a MONOPOLY on {field['group']}! Rent is doubled."
+            )
+
+        # 3. Zwykły czynsz bazowy
+        else:
+            rent = field.get("base_rent")
+
         print(
             f"💸 {player['name']} landed on {owner['name']}'s property and paid ${rent} rent!"
         )
-
         player["budget"] -= rent
         owner["budget"] += rent
+
     # WARUNEK 3: Nieruchomość na sprzedaż
     else:
         print(f"🏷️ {field['name']} is for sale for ${field['price']}!")
@@ -202,7 +318,7 @@ def handle_tax(player, field):
     )
 
 
-def handle_go_to_jail(player):
+def handle_go_to_jail(player, field):
     print("Not supported yet.")  # Do zrobienia
 
 
@@ -350,9 +466,32 @@ def handle_chance_nearest_utility(player, card):
 
 
 def handle_card_property_repairs(player, card):
+    house_cost = card["house_cost"]
+    hotel_cost = card["hotel_cost"]
+
+    total_houses = 0
+    total_hotels = 0
+
+    # 1. Liczymy wszystkie domki i hotele gracza
+    for prop in player["properties"]:
+        houses = prop.get("houses", 0)
+        if houses == 5:
+            total_hotels += 1
+        elif houses > 0:
+            total_houses += houses
+
+    # 2. Jeśli gracz nic nie ma, to ma farta!
+    if total_houses == 0 and total_hotels == 0:
+        print(f"😊 {player['name']} owns no buildings. Repair cost is $0!")
+        return
+
+    # 3. Obliczamy całkowity koszt
+    total_cost = (total_houses * house_cost) + (total_hotels * house_cost)
+
+    player["budget"] -= total_cost
     print(
-        f"Action type '{card['action_type']}' is not supported yet.\n"
-    )  # Do zrobienia
+        f"🛠️ {player['name']} paid ${total_cost} for property repairs ({total_houses} houses, {total_hotels} hotels)."
+    )
 
 
 def handle_community_chest_collect_from_players(player, card, all_players):
@@ -450,7 +589,7 @@ def handle_field_action(player, field, dice_total, all_players):
         case "tax":
             handle_tax(player, field)
         case "go_to_jail":
-            handle_go_to_jail(player)
+            handle_go_to_jail(player, field)
         case "chance":
             handle_chance(player, field, all_players)
         case "community_chest":

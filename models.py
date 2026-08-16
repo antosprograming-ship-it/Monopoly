@@ -13,3 +13,5 @@ player2 = {
     "properties": [],
     "jail_cards_count": 0,
 }
+
+bank = {"houses": 32, "hotels": 12}

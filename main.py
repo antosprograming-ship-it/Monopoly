@@ -6,7 +6,7 @@ RULES_TEXT = """
 === COMMANDS / RULES ===
 Type (play)  - to start game
 Type (c)     - to roll dice and continue
-Type (I)   - for your status
+Type (i)     - for your status
 Type (com)   - for computer status
 Type (rules) - to display rules
 ========================
@@ -20,6 +20,7 @@ def print_player_status(player):
     print(f"=== PLAYER STATUS: {player['name']} ===")
     print(f"Position: {current_field_name} (Field: #{current_position})")
     print(f"Budget: ${player['budget']}")
+    print(f"Jail cards count: {player['jail_cards_count']}")
 
     if player["properties"]:
         property_names = [p["name"] for p in player["properties"]]
@@ -31,21 +32,24 @@ def print_player_status(player):
 
 def play(player):
     d1, d2 = engine.roll_dice()
-    total_steps = d1 + d2
+    dice_total = d1 + d2
     is_double = d1 == d2
 
-    print(f"\n Rolling the dice: {d1} and {d2} (Total: {total_steps}) \n")
+    all_players = [models.player1, models.player2]
+
+    print(f"\n Rolling the dice: {d1} and {d2} (Total: {dice_total}) \n")
 
     if is_double:
         print(f"⚡ DOUBLE! {player['name']} has extra roll!")
 
-    new_position = engine.move_player(player, total_steps)
+    new_position = engine.move_player(player, dice_total)
     current_field = board[new_position]
 
     print(
         f"{player['name']} stood on: {current_field['name']} (Field: #{new_position})"
     )
-    engine.handle_field_action(player, current_field, total_steps)
+
+    engine.handle_field_action(player, current_field, dice_total, all_players)
 
     if is_double:
         return player

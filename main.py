@@ -8,14 +8,16 @@ JAIL_FINE = 50
 
 RULES_TEXT = """
 === COMMANDS / RULES ===
-Type (play)    - to start game
-Type (c)       - to roll dice and continue
-Type (i)       - for your status
-Type (com)     - for computer status
-Type (rules)   - to display rules
-Type (house)   - to buy a new house
-Type (restart) - to restart the game
-Type (sell)    - to sell house(s) / hotel(s)
+Type (play)       - to start game
+Type (c)          - to roll dice and continue
+Type (i)          - for your status
+Type (com)        - for computer status
+Type (rules)      - to display rules
+Type (house)      - to buy a new house
+Type (restart)    - to restart the game
+Type (sell)       - to sell house(s) / hotel(s)
+Type (mortgage)   - to mortgage property(s) | station(s) | company(s)
+Type (unmortgage) - to unmortgage property(s) | station(s) | company(s)
 ========================
 """
 
@@ -34,7 +36,10 @@ def print_player_status(player):
         print(f"In Jail: Yes (Turn: {player['jail_turns'] + 1}/3)")
 
     if player["properties"]:
-        property_names = [p["name"] for p in player["properties"]]
+        property_names = [
+            f"{p['name']} [MORTGAGED]" if p.get("is_mortgaged", False) else p["name"]
+            for p in player["properties"]
+        ]
         print(f"Properties ({len(property_names)}): {', '.join(property_names)}")
     else:
         print("No properties owned.")
@@ -220,11 +225,7 @@ def handle_build_menu(player):
             continue
 
         # 4. Szukamy ulic należących do wybranego koloru
-        group_properties = [
-            field
-            for field in board
-            if field.get("type") == "property" and field.get("group") == selected_group
-        ]
+        group_properties = engine.get_group_properties(selected_group)
 
         # 5. Podmenu wyboru konkretnej ulicy do rozbudowy
         while True:
@@ -232,8 +233,9 @@ def handle_build_menu(player):
             for index, prop in enumerate(group_properties, 1):
                 houses = prop.get("houses", 0)
                 status = f"{houses} house(s)" if houses < 5 else "HOTEL (5)"
+                mortgaged_tag = " [MORTGAGED]" if prop.get("is_mortgaged", False) else ""
                 print(
-                    f"{index}. {prop['name']} | Status: {status} | Cost: ${prop['house_cost']}"
+                    f"{index}. {prop['name']}{mortgaged_tag} | Status: {status} | Cost: ${prop['house_cost']}"
                 )
 
             prop_choice = (
@@ -302,11 +304,7 @@ def handle_sell_menu(player):
             continue
 
         # 4. Szukamy ulic należących do wybranego koloru
-        group_properties = [
-            field
-            for field in board
-            if field.get("type") == "property" and field.get("group") == selected_group
-        ]
+        group_properties = engine.get_group_properties(selected_group)
 
         # 5. Podmenu wyboru konkretnej ulicy
         while True:
@@ -315,8 +313,9 @@ def handle_sell_menu(player):
                 houses = prop.get("houses", 0)
                 status = f"{houses} house(s)" if houses < 5 else "HOTEL (5)"
                 refund = prop["house_cost"] // 2  # Bank oddaje 50% wartości budynku
+                mortgaged_tag = " [MORTGAGED]" if prop.get("is_mortgaged", False) else ""
                 print(
-                    f"{index}. {prop['name']} | Status: {status} | Sell price: ${refund}"
+                    f"{index}. {prop['name']}{mortgaged_tag} | Status: {status} | Sell price: ${refund}"
                 )
 
             prop_choice = (
@@ -341,6 +340,85 @@ def handle_sell_menu(player):
                 print(
                     "❌ Invalid input! Please enter a valid number or 'b' to go back."
                 )
+
+
+def handle_mortgage_menu(player):
+    while True:
+        # 1. Wyciągamy nieruchomości, które NIE SĄ zastawione ORAZ NIE MAJĄ budynków w całej grupie
+        eligible_properties = [
+            pro
+            for pro in player["properties"]
+            if not pro.get("is_mortgaged", False)
+            and not (pro.get("group") and engine.group_has_houses(pro.get("group")))
+        ]
+
+        # 2. Jeśli brak jakichkolwiek nieruchomości pod zastaw, wychodzimy
+        if not eligible_properties:
+            print(f"❌ {player['name']} has no properties available to mortgage!")
+            return
+
+        # 3. Wyświetlamy konkretne nieruchomości gotowe do zastawienia
+        print("\n=== CHOOSE PROPERTY TO MORTGAGE ===")
+        for index, prop in enumerate(eligible_properties, 1):
+            mortgage_value = prop["price"] // 2
+            group_label = prop.get("group", prop["type"]).upper()
+            print(
+                f"{index}. {prop['name']} ({group_label}) | Mortgage value: ${mortgage_value}"
+            )
+
+        choice = input("\nSelect property number (or 'c' to cancel): ").strip().lower()
+
+        if choice == "c":
+            return
+
+        if choice.isdigit():
+            prop_index = int(choice)
+            if 1 <= prop_index <= len(eligible_properties):
+                selected_property = eligible_properties[prop_index - 1]
+                print(f"✅ Selected property: {selected_property['name']}")
+                engine.mortgage_property(player, selected_property)
+            else:
+                print("❌ Invalid number! Choose a number from the list.")
+        else:
+            print("❌ Invalid input! Please enter a valid number or 'c' to cancel.")
+
+
+def handle_unmortgage_menu(player):
+    while True:
+        # 1. Wyciągamy nieruchomości, które SĄ zastawione
+        eligible_properties = [
+            pro for pro in player["properties"] if pro.get("is_mortgaged", False)
+        ]
+
+        # 2. Jeśli brak jakichkolwiek zastawionych nieruchomości, wychodzimy
+        if not eligible_properties:
+            print(f"❌ {player['name']} has no any mortgaged properties!")
+            return
+
+        # 3. Wyświetlamy konkretne nieruchomości gotowe do wykupienia
+        print("\n=== CHOOSE PROPERTY TO UNMORTGAGE ===")
+        for index, prop in enumerate(eligible_properties, 1):
+            unmortgage_value = engine.calculate_unmortgage_value(prop)
+            group_label = prop.get("group", prop["type"]).upper()
+            print(
+                f"{index}. {prop['name']} ({group_label}) | Unmortgage value: ${unmortgage_value}"
+            )
+
+        choice = input("\nSelect property number (or 'c' to cancel): ").strip().lower()
+
+        if choice == "c":
+            return
+
+        if choice.isdigit():
+            prop_index = int(choice)
+            if 1 <= prop_index <= len(eligible_properties):
+                selected_property = eligible_properties[prop_index - 1]
+                print(f"✅ Selected property: {selected_property['name']}")
+                engine.unmortgage_property(player, selected_property)
+            else:
+                print("❌ Invalid number! Choose a number from the list.")
+        else:
+            print("❌ Invalid input! Please enter a valid number or 'c' to cancel.")
 
 
 def main():
@@ -381,7 +459,13 @@ def main():
             print(RULES_TEXT)
 
         elif user_input == "sell":
-            handle_sell_menu(player)
+            handle_sell_menu(current_player)
+
+        elif user_input == "mortgage":
+            handle_mortgage_menu(current_player)
+
+        elif user_input == "unmortgage":
+            handle_unmortgage_menu(current_player)
 
         else:
             expected = "'play', 'i' or 'com'" if is_first_turn else "'c', 'i' or 'com'"

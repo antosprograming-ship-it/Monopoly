@@ -28,6 +28,8 @@ def reset_game(player1, player2, bank):
             field["owner"] = None
         if "houses" in field:
             field["houses"] = 0
+        if "is_mortgaged" in field:
+            field["is_mortgaged"] = False
 
     # 4. Ponowne przetasowanie kart
     random.shuffle(chance_cards)
@@ -93,6 +95,7 @@ def attempt_purchase(player, field):
         if player["budget"] >= field["price"]:
             player["budget"] -= field["price"]
             field["owner"] = player  # Przypisujemy obiekt gracza jako właściciela
+            field["is_mortgaged"] = False
             player["properties"].append(field)
             print(f"✅ {player['name']} bought {field['name']} for ${field['price']}!")
         else:
@@ -117,6 +120,33 @@ def has_monopoly(player, group_name):
     return total_in_group == player_in_group and total_in_group > 0
 
 
+def get_group_properties(group_name):
+    return [
+        f for f in board if f.get("type") == "property" and f.get("group") == group_name
+    ]
+
+
+def group_has_mortgaged_property(group_name):
+    return any(f.get("is_mortgaged", False) for f in get_group_properties(group_name))
+
+
+def group_has_houses(group_name):
+    return any(f.get("houses", 0) > 0 for f in get_group_properties(group_name))
+
+
+def rent_blocked_by_mortgage(player, field):
+    if field.get("is_mortgaged", False):
+        print(
+            f"  {field['name']} is mortgaged! {player['name']} does not pay any rent."
+        )
+        return True
+    return False
+
+
+def calculate_unmortgage_value(field):
+    return round((field["price"] // 2) * 1.1)
+
+
 def get_player_monopolies(player):
     # 1. Zbieramy unikalne grupy kolorów z posiadłości gracza (używamy set, żeby uniknąć duplikatów)
     player_groups = set()
@@ -139,36 +169,44 @@ def get_player_monopolies(player):
 def build_house(player, field, bank):
     group_name = field["group"]
 
+    # 1. Sprawdzenie monopolu
     if not has_monopoly(player, group_name):
         print(f"❌ {player['name']} does not have a monopoly on {group_name.upper()}!")
+        return
+
+    # 2. Pobieramy wszystkie ulice z tej grupy
+    group_props = get_group_properties(group_name)
+
+    # 🚨 BLOKADA BUDOWANIA DLA HIPOTEKI
+    # Jeśli którakolwiek ulica w grupie jest zastawiona, blokujemy rozbudowę
+    if group_has_mortgaged_property(group_name):
+        print(
+            f"❌ Cannot build on {group_name.upper()}! One or more properties in this group are mortgaged."
+        )
         return
 
     current_houses = field.get("houses", 0)
     house_cost = field["house_cost"]
 
-    # 2. Sprawdzenie maksymalnego rozbudowania (Hotel = 5)
+    # 3. Sprawdzenie maksymalnego rozbudowania (Hotel = 5)
     if current_houses >= 5:
         print(f"❌ {field['name']} already has a Hotel!")
         return
 
-    # 3. Zasada równomiernego budowania
-    group_props = [
-        f for f in board if f.get("type") == "property" and f.get("group") == group_name
-    ]
+    # 4. Zasada równomiernego budowania
     min_houses = min(f.get("houses", 0) for f in group_props)
-
     if current_houses > min_houses:
         print(
             f"❌ You must build evenly! Build on other properties in {group_name.upper()} first."
         )
         return
 
-    # 4. Sprawdzenie budżetu gracza
+    # 5. Sprawdzenie budżetu gracza
     if player["budget"] < house_cost:
         print(f"❌ {player['name']} cannot afford a building (${house_cost})!")
         return
 
-    # 5A. Budowa DOMKU (poziomy 1-4)
+    # 6A. Budowa DOMKU (poziomy 1-4)
     if current_houses < 4:
         if bank["houses"] <= 0:
             print("❌ Bank has no more houses available!")
@@ -181,7 +219,7 @@ def build_house(player, field, bank):
             f"🏠 {player['name']} built a house on {field['name']} for ${house_cost}!"
         )
 
-    # 5B. Transakcja na HOTEL (poziom 5)
+    # 6B. Transakcja na HOTEL (poziom 5)
     elif current_houses == 4:
         if bank["hotels"] <= 0:
             print("❌ Bank has no more hotels available!")
@@ -207,9 +245,7 @@ def sell_house(player, field, bank):
 
     # 2. Zasada równomiernego sprzedawania (Even Selling Rule)
     # Szukamy MAKSYMALNEJ liczby budynków w całej grupie kolorystycznej
-    group_props = [
-        f for f in board if f.get("type") == "property" and f.get("group") == group_name
-    ]
+    group_props = get_group_properties(group_name)
     max_houses = max(f.get("houses", 0) for f in group_props)
 
     # Sprzedawać można wyłącznie z ulic posiadających najwięcej budynków
@@ -246,6 +282,67 @@ def sell_house(player, field, bank):
         print(f"🏠 {player['name']} sold a house on {field['name']} for ${refund}!")
 
 
+def mortgage_property(player, field):
+    # 1. Zabezpieczenie przed zastawieniem nieruchomości należącej do innego gracza
+    if field.get("owner") is not player:
+        print(f"❌ {player['name']} does not own {field['name']}!")
+        return
+
+    # 2. Zabezpieczenie przed ponownym zastawieniem
+    if field.get("is_mortgaged", False):
+        print(f"❌ {field['name']} is already mortgaged.")
+        return
+
+    # 3. Zabezpieczenie przed zastawieniem nieruchomości z domkami w dzielnicy
+    group_name = field.get("group")
+    if group_name and group_has_houses(group_name):
+        print(
+            f"❌ Cannot mortgage {field['name']}! You must sell all houses in {group_name.upper()} first."
+        )
+        return
+
+    # 4. Wyliczenie kwoty zastawu (50% ceny zakupu)
+    mortgage_value = field["price"] // 2
+
+    # 5. Aktualizacja stanu gry
+    field["is_mortgaged"] = True
+    player["budget"] += mortgage_value
+
+    # 6. Komunikat dla gracza
+    print(f"🏦 {player['name']} mortgaged {field['name']} for ${mortgage_value}!")
+    print(f"   Current budget: ${player['budget']}")
+
+
+def unmortgage_property(player, field):
+    # 1. Zabezpieczenie przed wykupem nieruchomości należącej do innego gracza
+    if field.get("owner") is not player:
+        print(f"❌ {player['name']} does not own {field['name']}!")
+        return
+
+    # 2. Weryfikacja statusu hipoteki (Guard Clause)
+    if not field.get("is_mortgaged", False):
+        print(f"❌ {field['name']} is not mortgaged.")
+        return
+
+    # 3. Kalkulacja kosztu wykupu
+    unmortgage_value = calculate_unmortgage_value(field)
+
+    # 4. Sprawdzenie budżetu gracza (Guard Clause)
+    if player["budget"] < unmortgage_value:
+        print(
+            f"❌ {player['name']} cannot pay ${unmortgage_value} to unmortgage {field['name']}!"
+        )
+        return
+
+    # 5. Realizacja transakcji w pamięci
+    player["budget"] -= unmortgage_value
+    field["is_mortgaged"] = False
+
+    # 6. Powiadomienie gracza
+    print(f"🏦 {player['name']} unmortgaged {field['name']} for ${unmortgage_value}!")
+    print(f"   Current budget: ${player['budget']}")
+
+
 def handle_property(player, field):
     owner = field.get("owner")
 
@@ -255,6 +352,10 @@ def handle_property(player, field):
 
     # WARUNEK 2: Nieruchomość przeciwnika (płacenie czynszu)
     elif owner is not None:
+        # 🚨 BLOKADA CZYNSZU DLA HIPOTEKI
+        if rent_blocked_by_mortgage(player, field):
+            return
+
         houses = field.get("houses", 0)
 
         # 1. Jeśli na ulicy stoją budynki (1-4 domki lub 5 = hotel)
@@ -265,6 +366,7 @@ def handle_property(player, field):
             )
 
         # 2. Jeśli nie ma budynków, ale właściciel ma MONOPOL -> Podwójny czynsz
+        # (mortgage nie odbiera własności, więc nie przerywa monopolu na potrzeby tej reguły)
         elif has_monopoly(owner, field["group"]):
             rent = field.get("base_rent") * 2
             print(
@@ -296,7 +398,15 @@ def handle_station(player, field, multiplier=1):
 
     # WARUNEK 2: Stacja przeciwnika (płacenie czynszu)
     elif owner is not None:
-        station_count = sum(1 for p in owner["properties"] if p["type"] == "station")
+        # 🚨 BLOKADA CZYNSZU DLA HIPOTEKI
+        if rent_blocked_by_mortgage(player, field):
+            return
+
+        # Liczba dworców to WSZYSTKIE posiadane, także zastawione — mortgage nie zmienia
+        # własności, tylko blokuje czynsz z tej konkretnej nieruchomości.
+        station_count = sum(
+            1 for p in owner["properties"] if p.get("type") == "station"
+        )
         rent_levels = field["rent_levels"]
 
         # Obliczamy czynsz i MNOŻYMY przez multiplier!
@@ -333,7 +443,14 @@ def handle_company(player, field, dice_total, custom_multiplier=None):
 
     # WARUNEK 2: Firma przeciwnika (płacenie czynszu)
     elif owner is not None:
-        company_count = sum(1 for p in owner["properties"] if p["type"] == "company")
+        # 🚨 BLOKADA CZYNSZU DLA HIPOTEKI
+        if rent_blocked_by_mortgage(player, field):
+            return
+
+        # Liczba firm to WSZYSTKIE posiadane, także zastawione — jak przy dworcach.
+        company_count = sum(
+            1 for p in owner["properties"] if p.get("type") == "company"
+        )
 
         if custom_multiplier is not None:
             rent = dice_total * custom_multiplier

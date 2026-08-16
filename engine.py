@@ -61,6 +61,21 @@ def decide_purchase(player, field):
             print("Invalid input! Choose 'buy' or 'not'.")
 
 
+def attempt_purchase(player, field):
+    if decide_purchase(player, field):
+        if player["budget"] >= field["price"]:
+            player["budget"] -= field["price"]
+            field["owner"] = player  # Przypisujemy obiekt gracza jako właściciela
+            player["properties"].append(field)
+            print(
+                f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
+            )
+        else:
+            print(
+                f"{player['name']} does not have enough money to buy {field['name']}!"
+            )
+
+
 def has_monopoly(player, group_name):
     # 1. Liczymy, ile w sumie jest ulic w tym kolorze na całej planszy
     total_in_group = 0
@@ -194,19 +209,7 @@ def handle_property(player, field):
     # WARUNEK 3: Nieruchomość na sprzedaż
     else:
         print(f"🏷️ {field['name']} is for sale for ${field['price']}!")
-
-        if decide_purchase(player, field):
-            if player["budget"] >= field["price"]:
-                player["budget"] -= field["price"]
-                field["owner"] = player  # Przypisujemy obiekt gracza jako właściciela
-                player["properties"].append(field)
-                print(
-                    f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
-                )
-            else:
-                print(
-                    f"{player['name']} does not have enough money to buy {field['name']}!"
-                )
+        attempt_purchase(player, field)
 
 
 def handle_station(player, field, multiplier=1):
@@ -223,10 +226,7 @@ def handle_station(player, field, multiplier=1):
         rent_levels = field["rent_levels"]
 
         # Obliczamy czynsz i MNOŻYMY przez multiplier!
-        if station_count > 0:
-            rent = rent_levels[station_count - 1] * multiplier
-        else:
-            rent = 0
+        rent = rent_levels[station_count - 1] * multiplier
 
         print(f"💸 {player['name']} landed on {owner['name']}'s station!")
 
@@ -244,19 +244,7 @@ def handle_station(player, field, multiplier=1):
     # WARUNEK 3: Stacja na sprzedaż
     else:
         print(f"🏷️ {field['name']} is for sale for ${field['price']}!")
-
-        if decide_purchase(player, field):
-            if player["budget"] >= field["price"]:
-                player["budget"] -= field["price"]
-                field["owner"] = player
-                player["properties"].append(field)
-                print(
-                    f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
-                )
-            else:
-                print(
-                    f"{player['name']} does not have enough money to buy {field['name']}!"
-                )
+        attempt_purchase(player, field)
 
 
 def handle_company(player, field, dice_total, custom_multiplier=None):
@@ -272,13 +260,10 @@ def handle_company(player, field, dice_total, custom_multiplier=None):
 
         if custom_multiplier is not None:
             rent = dice_total * custom_multiplier
+        elif company_count == 1:
+            rent = dice_total * 4
         else:
-            if company_count == 1:
-                rent = dice_total * 4
-            elif company_count == 2:
-                rent = dice_total * 10
-            else:
-                rent = 0
+            rent = dice_total * 10
 
         print(f"💸 {player['name']} landed on {owner['name']}'s company!")
         if custom_multiplier is not None:
@@ -295,19 +280,7 @@ def handle_company(player, field, dice_total, custom_multiplier=None):
     # WARUNEK 3: Firma na sprzedaż
     else:
         print(f"💡 {field['name']} is for sale for ${field['price']}!")
-
-        if decide_purchase(player, field):
-            if player["budget"] >= field["price"]:
-                player["budget"] -= field["price"]
-                field["owner"] = player
-                player["properties"].append(field)
-                print(
-                    f"✅ {player['name']} bought {field['name']} for ${field['price']}!"
-                )
-            else:
-                print(
-                    f"{player['name']} does not have enough money to buy {field['name']}!"
-                )
+        attempt_purchase(player, field)
 
 
 def handle_tax(player, field):
@@ -315,12 +288,8 @@ def handle_tax(player, field):
 
     player["budget"] -= tax_amount
     print(
-        f"{player['name']} paid tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}\n"
+        f"{player['name']} paid tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}"
     )
-
-
-def handle_go_to_jail(player, field=None):
-    send_to_jail(player)
 
 
 # ==================================================
@@ -343,7 +312,7 @@ def handle_card_bank_money(player, card):
         )
 
 
-def handle_chance_move_relative(player, card, all_players):
+def handle_chance_move_relative(player, card, dice_total, all_players):
     steps = card["steps"]
     old_position = player["position_index"]
 
@@ -356,10 +325,10 @@ def handle_chance_move_relative(player, card, all_players):
     print(f"🚶 {player['name']} moves {direction} by {abs(steps)} spaces.")
     print(f"Landed on: {new_field['name']} (Field: #{new_position})")
 
-    handle_field_action(player, new_field, 0, all_players)
+    handle_field_action(player, new_field, dice_total, all_players)
 
 
-def handle_card_move_to_field(player, card, all_players):
+def handle_card_move_to_field(player, card, dice_total, all_players):
     target_id = card["target_id"]
     old_position = player["position_index"]
 
@@ -387,29 +356,26 @@ def handle_card_move_to_field(player, card, all_players):
         f"✈️  {player['name']} goes directly to: {new_field['name']} (Field: #{new_position})."
     )
 
-    handle_field_action(player, new_field, 0, all_players)
+    handle_field_action(player, new_field, dice_total, all_players)
 
 
 def handle_chance_pay_players(player, card, all_players):
     amount = card["amount"]
 
     for opponent in all_players:
-        if opponent != player:
+        if opponent is not player:
             player["budget"] -= amount
             opponent["budget"] += amount
 
             print(f"💸 {player['name']} pays to {opponent['name']} ${amount}!")
 
 
-def handle_card_keep_jail_card(player, card):
+def handle_card_keep_jail_card(player, card, deck):
     player["jail_cards_count"] += 1
+    player["jail_cards_held"].append({"card": card, "deck": deck})
 
     print(f"🎟️ {player['name']} got a 'Get out of jail free' Card!")
     print(f"   (Cards in inventory: {player['jail_cards_count']})")
-
-
-def handle_card_go_to_jail(player, card=None):
-    send_to_jail(player)
 
 
 def find_nearest_field(position, field_type):
@@ -497,7 +463,7 @@ def handle_community_chest_collect_from_players(player, card, all_players):
     amount = card["amount"]
 
     for opponent in all_players:
-        if opponent != player:
+        if opponent is not player:
             player["budget"] += amount
             opponent["budget"] -= amount
 
@@ -509,10 +475,14 @@ def handle_community_chest_collect_from_players(player, card, all_players):
 # ======================================================================== #
 
 
-def handle_chance(player, field, all_players):
+def handle_chance(player, field, dice_total, all_players):
     # 1. Pobieranie karty z góry talii i odłożenie na spód
     card = chance_cards.pop(0)
-    chance_cards.append(card)
+
+    # Karta "Wyjdź z więzienia za darmo" zostaje u gracza i wraca do talii
+    # dopiero, gdy zostanie wykorzystana.
+    if card["action_type"] != "keep_jail_card":
+        chance_cards.append(card)
 
     print(f"\n {player['name']} draws a Chance card: ")
     print()
@@ -524,19 +494,19 @@ def handle_chance(player, field, all_players):
             handle_card_bank_money(player, card)
 
         case "move_relative":
-            handle_chance_move_relative(player, card, all_players)
+            handle_chance_move_relative(player, card, dice_total, all_players)
 
         case "pay_players":
             handle_chance_pay_players(player, card, all_players)
 
         case "move_to_field":
-            handle_card_move_to_field(player, card, all_players)
+            handle_card_move_to_field(player, card, dice_total, all_players)
 
         case "keep_jail_card":
-            handle_card_keep_jail_card(player, card)
+            handle_card_keep_jail_card(player, card, chance_cards)
 
         case "go_to_jail":
-            handle_card_go_to_jail(player, card)
+            send_to_jail(player)
 
         case "nearest_station":
             handle_chance_nearest_station(player, card)
@@ -548,9 +518,13 @@ def handle_chance(player, field, all_players):
             handle_card_property_repairs(player, card)
 
 
-def handle_community_chest(player, field, all_players):
+def handle_community_chest(player, field, dice_total, all_players):
     card = community_chest_cards.pop(0)
-    community_chest_cards.append(card)
+
+    # Karta "Wyjdź z więzienia za darmo" zostaje u gracza i wraca do talii
+    # dopiero, gdy zostanie wykorzystana.
+    if card["action_type"] != "keep_jail_card":
+        community_chest_cards.append(card)
 
     print(f"\n {player['name']} draws a community chest card: ")
     print()
@@ -561,16 +535,16 @@ def handle_community_chest(player, field, all_players):
             handle_card_bank_money(player, card)
 
         case "go_to_jail":
-            handle_card_go_to_jail(player, card)
+            send_to_jail(player)
 
         case "keep_jail_card":
-            handle_card_keep_jail_card(player, card)
+            handle_card_keep_jail_card(player, card, community_chest_cards)
 
         case "property_repairs":
             handle_card_property_repairs(player, card)
 
         case "move_to_field":
-            handle_card_move_to_field(player, card, all_players)
+            handle_card_move_to_field(player, card, dice_total, all_players)
 
         case "collect_from_players":
             handle_community_chest_collect_from_players(player, card, all_players)
@@ -588,11 +562,11 @@ def handle_field_action(player, field, dice_total, all_players):
         case "tax":
             handle_tax(player, field)
         case "go_to_jail":
-            handle_go_to_jail(player)
+            send_to_jail(player)
         case "chance":
-            handle_chance(player, field, all_players)
+            handle_chance(player, field, dice_total, all_players)
         case "community_chest":
-            handle_community_chest(player, field, all_players)
+            handle_community_chest(player, field, dice_total, all_players)
         case "station":
             handle_station(player, field)
         case "company":

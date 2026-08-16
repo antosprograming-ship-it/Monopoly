@@ -36,6 +36,14 @@ def move_player(player, steps):
     return new_position
 
 
+def send_to_jail(player):
+    player["position_index"] = 10
+    player["in_jail"] = True
+    player["jail_turns"] = 0
+    player["double_count"] = 0
+    print(f"🚨 {player['name']} is sent directly to Jail!")
+
+
 # Logika pól
 # ==================================================
 def decide_purchase(player, field):
@@ -61,10 +69,9 @@ def has_monopoly(player, group_name):
             total_in_group += 1
 
     # 2. Liczymy, ile z tych ulic ma w ekwipunku gracz
-    player_in_group = 0
-    for prop in player["properties"]:
-        if prop.get("group") == group_name:
-            player_in_group += 1
+    player_in_group = sum(
+        1 for p in player["properties"] if p.get("group") == group_name
+    )
 
     # 3. Zwracamy True tylko wtedy, gdy gracz ma wszystkie ulice z danego koloru
     return total_in_group == player_in_group and total_in_group > 0
@@ -211,10 +218,7 @@ def handle_station(player, field, multiplier=1):
 
     # WARUNEK 2: Stacja przeciwnika (płacenie czynszu)
     elif owner is not None:
-        station_count = 0
-        for p in owner["properties"]:
-            if p["type"] == "station":
-                station_count += 1
+        station_count = sum(1 for p in owner["properties"] if p["type"] == "station")
 
         rent_levels = field["rent_levels"]
 
@@ -264,10 +268,7 @@ def handle_company(player, field, dice_total, custom_multiplier=None):
 
     # WARUNEK 2: Firma przeciwnika (płacenie czynszu)
     elif owner is not None:
-        company_count = 0
-        for c in owner["properties"]:
-            if c["type"] == "company":
-                company_count += 1
+        company_count = sum(1 for p in owner["properties"] if p["type"] == "company")
 
         if custom_multiplier is not None:
             rent = dice_total * custom_multiplier
@@ -318,8 +319,8 @@ def handle_tax(player, field):
     )
 
 
-def handle_go_to_jail(player, field):
-    print("Not supported yet.")  # Do zrobienia
+def handle_go_to_jail(player, field=None):
+    send_to_jail(player)
 
 
 # ==================================================
@@ -407,10 +408,8 @@ def handle_card_keep_jail_card(player, card):
     print(f"   (Cards in inventory: {player['jail_cards_count']})")
 
 
-def handle_card_go_to_jail(player, card):
-    print(
-        f"Action type '{card['action_type']}' is not supported yet.\n"
-    )  # Do zrobienia
+def handle_card_go_to_jail(player, card=None):
+    send_to_jail(player)
 
 
 def find_nearest_field(position, field_type):
@@ -486,7 +485,7 @@ def handle_card_property_repairs(player, card):
         return
 
     # 3. Obliczamy całkowity koszt
-    total_cost = (total_houses * house_cost) + (total_hotels * house_cost)
+    total_cost = (total_houses * house_cost) + (total_hotels * hotel_cost)
 
     player["budget"] -= total_cost
     print(
@@ -589,7 +588,7 @@ def handle_field_action(player, field, dice_total, all_players):
         case "tax":
             handle_tax(player, field)
         case "go_to_jail":
-            handle_go_to_jail(player, field)
+            handle_go_to_jail(player)
         case "chance":
             handle_chance(player, field, all_players)
         case "community_chest":

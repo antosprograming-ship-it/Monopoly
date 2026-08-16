@@ -2,6 +2,8 @@ import engine
 import models
 from board import board
 
+JAIL_FINE = 50
+
 RULES_TEXT = """
 === COMMANDS / RULES ===
 Type (play)  - to start game
@@ -22,6 +24,10 @@ def print_player_status(player):
     print(f"Position: {current_field_name} (Field: #{current_position})")
     print(f"Budget: ${player['budget']}")
     print(f"Jail cards count: {player['jail_cards_count']}")
+    if not player["in_jail"]:
+        print(f"In Jail: No")
+    else:
+        print(f"In Jail: Yes (Turn: {player['jail_turns']})")
 
     if player["properties"]:
         property_names = [p["name"] for p in player["properties"]]
@@ -31,18 +37,121 @@ def print_player_status(player):
     print("=" * 32 + "\n")
 
 
+def handle_jail_turn(player):
+    print(f"\n🔒 {player['name']} is in Jail! (Turn {player['jail_turns'] + 1}/3)")
+
+    while True:
+        print("=== JAIL MENU ===")
+        print("1. Pay $50 fine to get out")
+        if player["jail_cards_count"] > 0:
+            print("2. Use 'Get Out of Jail Free' card")
+        print("3. Roll dice for doubles")
+
+        options = "1, 2, 3" if player["jail_cards_count"] > 0 else "1, 3"
+        choice = input(f"\nChoose option ({options}): ").strip()
+
+        # OPCJA 1: Zapłata $50
+        if choice == "1":
+            if player["budget"] >= 50:
+                player["budget"] -= JAIL_FINE
+                player["in_jail"] = False
+                player["jail_turns"] = 0
+                print(f"✅ {player['name']} paid $50 and is now free from Jail!")
+                # Po uwolnieniu gracz może wykonać normalny ruch
+                return True
+            else:
+                print("❌ You don't have enough money ($50)!")
+
+        # OPCJA 2: Użycie karty (jeśli gracz ją ma)
+        elif choice == "2" and player["jail_cards_count"] > 0:
+            player["jail_cards_count"] -= 1
+            player["in_jail"] = False
+            player["jail_turns"] = 0
+            print(f"🎟️ {player['name']} used a Jail card and is now free!")
+            return True
+
+        # OPCJA 3: Rzut kostkami na dublet
+        elif choice == "3":
+            d1, d2 = engine.roll_dice()
+            print(f"🎲 Jail roll: {d1} and {d2} (Total: {d1 + d2})")
+
+            if d1 == d2:
+                player["in_jail"] = False
+                player["jail_turns"] = 0
+                print(f"⚡ DOUBLE! {player['name']} rolled doubles and escaped Jail!")
+
+                # Ruch o wyrzuconą sumę (ale BEZ dodatkowego rzutu za dublet w więzieniu!)
+                dice_total = d1 + d2
+                new_position = engine.move_player(player, dice_total)
+                current_field = board[new_position]
+                print(
+                    f"{player['name']} moved to: {current_field['name']} (Field: #{new_position})"
+                )
+                all_players = [models.player1, models.player2]
+                engine.handle_field_action(
+                    player, current_field, dice_total, all_players
+                )
+                return False  # Tura dobiegła końca
+            else:
+                print(f"❌ No double. {player['name']} stays in Jail.")
+                player["jail_turns"] += 1
+
+                # Zasada 3 tur: jeśli po 3 próbach nie wyrzucił dubletu, musi zapłacić $50
+                if player["jail_turns"] >= 3:
+                    print(
+                        f"⚠️ {player['name']} spent 3 turns in Jail and must pay $50 fine!"
+                    )
+                    player["budget"] -= JAIL_FINE
+                    player["in_jail"] = False
+                    player["jail_turns"] = 0
+                    print(f"💸 Fine paid. Budget: ${player['budget']}")
+
+                    dice_total = d1 + d2
+                    new_position = engine.move_player(player, dice_total)
+                    current_field = board[new_position]
+                    all_players = [models.player1, models.player2]
+                    engine.handle_field_action(
+                        player, current_field, dice_total, all_players
+                    )
+                return False  # Tura mija
+        else:
+            print("❌ Invalid choice, try again.")
+
+
 def play(player):
+    all_players = [models.player1, models.player2]
+
+    # 1. Obsługa tury w Więzieniu
+    # JEŚLI GRACZ JEST W WIĘZIENIU -> Odpalamy menu więzienne
+    if player["in_jail"]:
+        can_move_normally = handle_jail_turn(player)
+        if not can_move_normally:
+            # Tura się kończy, przechodzimy do drugiego gracza
+            return models.player2 if player == models.player1 else models.player1
+        # Jeśli gracz właśnie zapłacił lub użył karty, przechodzimy poniżej do zwykłego rzutu!
+
     d1, d2 = engine.roll_dice()
     dice_total = d1 + d2
     is_double = d1 == d2
 
-    all_players = [models.player1, models.player2]
-
     print(f"\n Rolling the dice: {d1} and {d2} (Total: {dice_total}) \n")
 
+    # 2. Sprawdzanie serii dubletów
     if is_double:
-        print(f"⚡ DOUBLE! {player['name']} has extra roll!")
+        player["double_count"] += 1
+        print(f"⚡ DOUBLE! ({player['double_count']}/3)")
 
+        # ZASADA 3 DUBLETÓW Z RZĘDU
+        if player["double_count"] == 3:
+            print(f"🚨 3 DOUBLES IN A ROW! {player['name']} goes directly to Jail!")
+            engine.send_to_jail(player)
+            # Koniec tury – ruch przada na przeciwnika
+            return models.player2 if player == models.player1 else models.player1
+    else:
+        # Brak dubletu – zerujemy serię
+        player["double_count"] = 0
+
+    # 3. Standardowy ruch po planszy
     new_position = engine.move_player(player, dice_total)
     current_field = board[new_position]
 
@@ -52,8 +161,9 @@ def play(player):
 
     engine.handle_field_action(player, current_field, dice_total, all_players)
 
+    # 4. Przekazanie tury
     if is_double:
-        return player
+        return player  # Kolejny rzut tego samego gracza
     else:
         return models.player2 if player == models.player1 else models.player1
 

@@ -1,10 +1,13 @@
 import random
+from copy import deepcopy
 from chance_cards import chance_cards
 from community_chest_cards import community_chest_cards
 from board import board
 
 BOARD_SIZE = 40
 GO_BONUS = 200
+CHANCE_CARDS_TEMPLATE = deepcopy(chance_cards)
+COMMUNITY_CHEST_CARDS_TEMPLATE = deepcopy(community_chest_cards)
 
 
 def execute_bankruptcy(bankrupt_player, all_players, bank):
@@ -23,7 +26,9 @@ def execute_bankruptcy(bankrupt_player, all_players, bank):
             else:
                 bank["houses"] += houses
 
-            bankrupt_player["budget"] += refund
+            if creditor is not None:
+                # Gotówka z przymusowej sprzedaży budynków trafia do wierzyciela.
+                creditor["budget"] += refund
             print(
                 f"🏚️ Bank auto-liquidates {houses} building(s) on {prop['name']} for ${refund}."
             )
@@ -57,7 +62,6 @@ def execute_bankruptcy(bankrupt_player, all_players, bank):
             else:
                 print(f"   🏠 {creditor['name']} receives {prop['name']}")
 
-        bankrupt_player["budget"] = 0
         check_and_flag_debt(creditor, creditor=None)
 
     else:
@@ -74,9 +78,14 @@ def execute_bankruptcy(bankrupt_player, all_players, bank):
             held_card["deck"].append(held_card["card"])
 
     # Wyczyść i usuń gracza
+    bankrupt_player["budget"] = 0
     bankrupt_player["properties"].clear()
+    bankrupt_player["jail_cards_count"] = 0
     bankrupt_player["jail_cards_held"].clear()
-    all_players.remove(bankrupt_player)
+    bankrupt_player["is_in_debt"] = False
+    bankrupt_player["creditor"] = None
+    if bankrupt_player in all_players:
+        all_players.remove(bankrupt_player)
     print(f"\n👋 {bankrupt_player['name']} has been eliminated from the game!\n")
 
     # Zwracamy wierzyciela i listę zastawionych ulic (jeśli istnieją)
@@ -109,7 +118,9 @@ def reset_game(player1, player2, bank):
         if "is_mortgaged" in field:
             field["is_mortgaged"] = False
 
-    # 4. Ponowne przetasowanie kart
+    # 4. Odtworzenie pełnych talii, także kart trzymanych przez graczy.
+    chance_cards[:] = deepcopy(CHANCE_CARDS_TEMPLATE)
+    community_chest_cards[:] = deepcopy(COMMUNITY_CHEST_CARDS_TEMPLATE)
     random.shuffle(chance_cards)
     random.shuffle(community_chest_cards)
 
@@ -207,6 +218,10 @@ def decide_purchase(player, field):
 
 
 def attempt_purchase(player, field):
+    if field.get("owner") is not None:
+        print(f"{field['name']} already belongs to another player.")
+        return False
+
     if decide_purchase(player, field):
         if player["budget"] >= field["price"]:
             player["budget"] -= field["price"]
@@ -214,10 +229,12 @@ def attempt_purchase(player, field):
             field["is_mortgaged"] = False
             player["properties"].append(field)
             print(f"✅ {player['name']} bought {field['name']} for ${field['price']}!")
+            return True
         else:
             print(
                 f"{player['name']} does not have enough money to buy {field['name']}!"
             )
+    return False
 
 
 def has_monopoly(player, group_name):
@@ -283,6 +300,10 @@ def get_player_monopolies(player):
 
 
 def build_house(player, field, bank):
+    if field.get("owner") is not player:
+        print(f"{player['name']} does not own {field['name']}!")
+        return
+
     group_name = field["group"]
 
     # 1. Sprawdzenie monopolu
@@ -362,6 +383,10 @@ def can_sell_house(field):
 
 
 def sell_house(player, field, bank):
+    if field.get("owner") is not player:
+        print(f"{player['name']} does not own {field['name']}!")
+        return
+
     group_name = field["group"]
     current_houses = field.get("houses", 0)
 

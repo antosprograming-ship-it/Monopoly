@@ -96,17 +96,25 @@ def handle_computer_debt_resolution(player):
         print(f"\n💀 {player['name']} cannot cover the debt and is BANKRUPT!")
 
 
+def declare_bankruptcy(player, all_players):
+    creditor, inherited_props = engine.execute_bankruptcy(
+        player, all_players, models.bank
+    )
+
+    if creditor and inherited_props:
+        handle_inherited_mortgages(creditor, inherited_props)
+
+    # Odsetki zapłacone przez wierzyciela mogą utworzyć nowy dług.
+    if creditor in all_players and creditor.get("is_in_debt"):
+        handle_debt_menu(creditor, all_players)
+
+    return "BANKRUPT"
+
+
 def handle_debt_menu(player, all_players):
     # 1. KROK SZYBKIEGO BANKRUCTWA:
     if engine.get_player_liquidation_value(player) < 0:
-        creditor, inherited_props = engine.execute_bankruptcy(
-            player, all_players, models.bank
-        )
-
-        if creditor and inherited_props:
-            handle_inherited_mortgages(creditor, inherited_props)
-
-        return "BANKRUPT"
+        return declare_bankruptcy(player, all_players)
 
     # 2. PĘTLIA RATUNKOWA:
     # Jeśli wycena majątku >= 0, gracz MOŻE wyjść z długu, więc dajemy mu wybór
@@ -119,7 +127,9 @@ def handle_debt_menu(player, all_players):
 
     if player["name"] == "Computer":
         handle_computer_debt_resolution(player)
-        return
+        if player["is_in_debt"]:
+            return declare_bankruptcy(player, all_players)
+        return "RESOLVED"
 
     while player["is_in_debt"]:
         print("\n=== DEBT RESOLUTION MENU ===")
@@ -140,6 +150,8 @@ def handle_debt_menu(player, all_players):
             print("❌ You must resolve your debt first! Choose 'sell' or 'mortgage'.")
 
         engine.check_and_flag_debt(player, creditor=player.get("creditor"))
+
+    return "RESOLVED"
 
 
 def handle_inherited_mortgages(creditor, inherited_props):
@@ -268,7 +280,8 @@ def handle_jail_turn(player, all_players):
                 engine.check_and_flag_debt(player, creditor=None)
 
                 if player["is_in_debt"]:
-                    handle_debt_menu(player)
+                    if handle_debt_menu(player, all_players) == "BANKRUPT":
+                        return "BANKRUPT"
 
                 return False  # Tura dobiegła końca
             else:
@@ -298,23 +311,36 @@ def handle_jail_turn(player, all_players):
                 engine.check_and_flag_debt(player, creditor=None)
 
                 if player["is_in_debt"]:
-                    handle_debt_menu(player)
+                    if handle_debt_menu(player, all_players) == "BANKRUPT":
+                        return "BANKRUPT"
 
                 return False  # Tura mija
         else:
             print("❌ Invalid choice, try again.")
 
 
-def play(player):
-    all_players = [models.player1, models.player2]
+def get_next_active_player(player, all_players):
+    if not all_players:
+        return None
+
+    if player not in all_players:
+        return all_players[0]
+
+    current_index = all_players.index(player)
+    return all_players[(current_index + 1) % len(all_players)]
+
+
+def play(player, all_players):
 
     # 1. Obsługa tury w Więzieniu
     # JEŚLI GRACZ JEST W WIĘZIENIU -> Odpalamy menu więzienne
     if player["in_jail"]:
-        can_move_normally = handle_jail_turn(player, all_players)
-        if not can_move_normally:
+        jail_result = handle_jail_turn(player, all_players)
+        if jail_result == "BANKRUPT":
+            return get_next_active_player(player, all_players)
+        if not jail_result:
             # Tura się kończy, przechodzimy do drugiego gracza
-            return models.player2 if player is models.player1 else models.player1
+            return get_next_active_player(player, all_players)
         # Jeśli gracz właśnie zapłacił lub użył karty, przechodzimy poniżej do zwykłego rzutu!
 
     d1, d2 = engine.roll_dice()
@@ -333,7 +359,7 @@ def play(player):
             print(f"🚨 3 DOUBLES IN A ROW! {player['name']} goes directly to Jail!")
             engine.send_to_jail(player)
             # Koniec tury – ruch przechodzi na przeciwnika
-            return models.player2 if player is models.player1 else models.player1
+            return get_next_active_player(player, all_players)
     else:
         # Brak dubletu – zerujemy serię
         player["double_count"] = 0
@@ -349,13 +375,14 @@ def play(player):
     engine.handle_field_action(player, current_field, dice_total, all_players)
 
     if player["is_in_debt"]:
-        handle_debt_menu(player)
+        if handle_debt_menu(player, all_players) == "BANKRUPT":
+            return get_next_active_player(player, all_players)
 
     # 4. Przekazanie tury
     if is_double and not player["in_jail"]:
         return player  # Kolejny rzut tego samego gracza
     else:
-        return models.player2 if player is models.player1 else models.player1
+        return get_next_active_player(player, all_players)
 
 
 def handle_build_menu(player):
@@ -598,6 +625,7 @@ def handle_unmortgage_menu(player):
 
 def main():
     current_player = models.player1
+    active_players = [models.player1, models.player2]
     is_first_turn = True
 
     print(RULES_TEXT)
@@ -617,11 +645,23 @@ def main():
             print(RULES_TEXT)
 
         elif is_first_turn and user_input == "play":
-            current_player = play(current_player)
+            current_player = play(current_player, active_players)
             is_first_turn = False
+            if len(active_players) <= 1:
+                if active_players:
+                    print(f"🏆 {active_players[0]['name']} wins the game!")
+                else:
+                    print("🏦 All players went bankrupt. The Bank wins!")
+                return
 
         elif not is_first_turn and user_input == "c":
-            current_player = play(current_player)
+            current_player = play(current_player, active_players)
+            if len(active_players) <= 1:
+                if active_players:
+                    print(f"🏆 {active_players[0]['name']} wins the game!")
+                else:
+                    print("🏦 All players went bankrupt. The Bank wins!")
+                return
 
         elif user_input == "house":
             handle_build_menu(current_player)
@@ -629,6 +669,7 @@ def main():
         elif user_input == "restart":
             engine.reset_game(models.player1, models.player2, models.bank)
             current_player = models.player1
+            active_players = [models.player1, models.player2]
             is_first_turn = True
             print("🔄 Game has been completely restarted!\n")
             print(RULES_TEXT)

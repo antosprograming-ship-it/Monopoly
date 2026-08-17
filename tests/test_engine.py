@@ -27,6 +27,19 @@ class TestPurchase:
         assert field["owner"] is None
         assert p2["budget"] == 10
 
+    def test_purchase_cannot_overwrite_existing_owner(
+        self, p1, p2, find_field, monkeypatch
+    ):
+        field = find_field("ulica_konopacka")
+        field["owner"] = p2
+        monkeypatch.setattr(engine, "decide_purchase", lambda *_: True)
+
+        purchased = engine.attempt_purchase(p1, field)
+
+        assert purchased is False
+        assert field["owner"] is p2
+        assert p1["budget"] == 1500
+
 
 # ============================================================
 # Czynsz za ulice
@@ -372,6 +385,7 @@ class TestSellHouse:
 
     def test_sells_from_max_house_property(self, p1, bank, find_field):
         konopacka = find_field("ulica_konopacka")
+        konopacka["owner"] = p1
         find_field("ulica_stalowa")["houses"] = 1
         konopacka["houses"] = 2
 
@@ -393,6 +407,7 @@ class TestSellHouse:
 
     def test_hotel_downgrade_success(self, p1, bank, find_field):
         konopacka = find_field("ulica_konopacka")
+        konopacka["owner"] = p1
         konopacka["houses"] = 5
 
         engine.sell_house(p1, konopacka, bank)
@@ -401,6 +416,18 @@ class TestSellHouse:
         assert bank["hotels"] == 12 + 1
         assert bank["houses"] == 32 - 4
         assert p1["budget"] == 1500 + konopacka["house_cost"] // 2
+
+    def test_non_owner_cannot_sell_another_players_house(
+        self, p1, p2, bank, find_field
+    ):
+        konopacka = find_field("ulica_konopacka")
+        konopacka["owner"] = p2
+        konopacka["houses"] = 1
+
+        engine.sell_house(p1, konopacka, bank)
+
+        assert konopacka["houses"] == 1
+        assert p1["budget"] == 1500
 
 
 # ============================================================
@@ -699,6 +726,34 @@ class TestCheckAndFlagDebt:
         assert result is False
         assert p1["is_in_debt"] is False
         assert p1["creditor"] is None
+
+
+class TestBankruptcy:
+    def test_building_sale_cash_and_assets_go_to_creditor(
+        self, p1, p2, bank, find_field
+    ):
+        konopacka = find_field("ulica_konopacka")
+        konopacka["owner"] = p1
+        konopacka["houses"] = 1
+        p1["properties"] = [konopacka]
+        p1["budget"] = -100
+        p1["is_in_debt"] = True
+        p1["creditor"] = p2
+        active_players = [p1, p2]
+
+        creditor, inherited_props = engine.execute_bankruptcy(
+            p1, active_players, bank
+        )
+
+        assert creditor is p2
+        assert inherited_props == []
+        assert active_players == [p2]
+        assert konopacka["owner"] is p2
+        assert konopacka in p2["properties"]
+        assert konopacka["houses"] == 0
+        assert p2["budget"] == 1500 + konopacka["house_cost"] // 2
+        assert p1["budget"] == 0
+        assert p1["is_in_debt"] is False
 
 
 class TestGetPlayerLiquidationValue:

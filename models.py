@@ -8,6 +8,8 @@ player1 = {
     "in_jail": False,
     "jail_turns": 0,
     "double_count": 0,
+    "is_in_debt": False,
+    "creditor": None,
 }
 
 player2 = {
@@ -20,6 +22,8 @@ player2 = {
     "in_jail": False,
     "jail_turns": 0,
     "double_count": 0,
+    "is_in_debt": False,
+    "creditor": None,
 }
 
 bank = {"houses": 32, "hotels": 12}

@@ -27,6 +27,12 @@ def print_player_status(player):
     current_field_name = board[current_position]["name"]
 
     print(f"=== PLAYER STATUS: {player['name']} ===")
+
+    if player.get("is_in_debt", False):
+        debt_val = abs(player["budget"])
+        creditor_name = player["creditor"]["name"] if player.get("creditor") else "Bank"
+        print(f"⚠️ STATUS: IN DEBT (-${debt_val}) | Owed to: {creditor_name}")
+
     print(f"Position: {current_field_name} (Field: #{current_position})")
     print(f"Budget: ${player['budget']}")
     print(f"Jail cards count: {player['jail_cards_count']}")
@@ -44,6 +50,97 @@ def print_player_status(player):
     else:
         print("No properties owned.")
     print("=" * 32 + "\n")
+
+
+def get_sellable_property(player):
+    # Zwraca pierwszą napotkaną nieruchomość, którą można legalnie sprzedać.
+    # Hotel pomijamy, jeśli Bank nie ma 4 domków potrzebnych do jego zejścia
+    # (inaczej sell_house odrzuciłby sprzedaż i pętla AI utknęłaby w miejscu).
+    for prop in player["properties"]:
+        if not engine.can_sell_house(prop):
+            continue
+        if prop.get("houses", 0) == 5 and models.bank["houses"] < 4:
+            continue
+        return prop
+    return None
+
+
+def get_mortgageable_property(player):
+    # Zwraca pierwszą napotkaną nieruchomość, którą można legalnie zastawić
+    for prop in player["properties"]:
+        if prop.get("is_mortgaged", False):
+            continue
+        group = prop.get("group")
+        if group and engine.group_has_houses(group):
+            continue
+        return prop
+    return None
+
+
+def handle_computer_debt_resolution(player):
+    print(f"🤖 {player['name']} is automatically resolving debt...")
+
+    # 1. Najpierw sprzedaje domki/hotele
+    while player["is_in_debt"]:
+        prop = get_sellable_property(player)
+        if prop is None:
+            break
+        engine.sell_house(player, prop, models.bank)
+        engine.check_and_flag_debt(player, creditor=player.get("creditor"))
+
+    # 2. Jeśli to nie wystarczy, zastawia nieruchomości
+    while player["is_in_debt"]:
+        prop = get_mortgageable_property(player)
+        if prop is None:
+            break
+        engine.mortgage_property(player, prop)
+        engine.check_and_flag_debt(player, creditor=player.get("creditor"))
+
+    # 3. Jeśli nadal jest w długu, jest bankrutem
+    if player["is_in_debt"]:
+        print(f"\n💀 {player['name']} cannot cover the debt and is BANKRUPT!")
+
+
+def handle_debt_menu(player):
+    # 1. KROK SZYBKIEGO BANKRUCTWA:
+    # Sprawdzamy, czy gracz ma w ogóle matematyczną możliwość spłaty długu
+    if engine.get_player_liquidation_value(player) < 0:
+        print(f"\n💀 {player['name']} cannot cover the debt and is BANKRUPT!")
+        # TUTAJ w przyszłości podepniemy przekazanie majątku i koniec gry
+        return
+
+    # 2. PĘTLIA RATUNKOWA:
+    # Jeśli wycena majątku >= 0, gracz MOŻE wyjść z długu, więc dajemy mu wybór
+    debt_amount = abs(player["budget"])
+    creditor_name = player["creditor"]["name"] if player["creditor"] else "Bank"
+
+    print(
+        f"\n🚨 {player['name']} MUST COVER DEBT OF ${debt_amount} (Owed to: {creditor_name})"
+    )
+
+    if player["name"] == "Computer":
+        handle_computer_debt_resolution(player)
+        return
+
+    while player["is_in_debt"]:
+        print("\n=== DEBT RESOLUTION MENU ===")
+        print("Type 'sell'     - to sell houses/hotels")
+        print("Type 'mortgage' - to mortgage properties")
+
+        try:
+            choice = input("\nChoose action: ").strip().lower()
+        except EOFError:
+            print("\n❌ No more input available. Exiting game.")
+            sys.exit(0)
+
+        if choice == "sell":
+            handle_sell_menu(player)
+        elif choice == "mortgage":
+            handle_mortgage_menu(player)
+        else:
+            print("❌ You must resolve your debt first! Choose 'sell' or 'mortgage'.")
+
+        engine.check_and_flag_debt(player, creditor=player.get("creditor"))
 
 
 def handle_jail_turn(player, all_players):
@@ -108,6 +205,12 @@ def handle_jail_turn(player, all_players):
                 engine.handle_field_action(
                     player, current_field, dice_total, all_players
                 )
+
+                engine.check_and_flag_debt(player, creditor=None)
+
+                if player["is_in_debt"]:
+                    handle_debt_menu(player)
+
                 return False  # Tura dobiegła końca
             else:
                 print(f"❌ No double. {player['name']} stays in Jail.")
@@ -132,6 +235,12 @@ def handle_jail_turn(player, all_players):
                     engine.handle_field_action(
                         player, current_field, dice_total, all_players
                     )
+
+                engine.check_and_flag_debt(player, creditor=None)
+
+                if player["is_in_debt"]:
+                    handle_debt_menu(player)
+
                 return False  # Tura mija
         else:
             print("❌ Invalid choice, try again.")
@@ -179,6 +288,9 @@ def play(player):
     )
 
     engine.handle_field_action(player, current_field, dice_total, all_players)
+
+    if player["is_in_debt"]:
+        handle_debt_menu(player)
 
     # 4. Przekazanie tury
     if is_double and not player["in_jail"]:
@@ -233,7 +345,9 @@ def handle_build_menu(player):
             for index, prop in enumerate(group_properties, 1):
                 houses = prop.get("houses", 0)
                 status = f"{houses} house(s)" if houses < 5 else "HOTEL (5)"
-                mortgaged_tag = " [MORTGAGED]" if prop.get("is_mortgaged", False) else ""
+                mortgaged_tag = (
+                    " [MORTGAGED]" if prop.get("is_mortgaged", False) else ""
+                )
                 print(
                     f"{index}. {prop['name']}{mortgaged_tag} | Status: {status} | Cost: ${prop['house_cost']}"
                 )
@@ -313,7 +427,9 @@ def handle_sell_menu(player):
                 houses = prop.get("houses", 0)
                 status = f"{houses} house(s)" if houses < 5 else "HOTEL (5)"
                 refund = prop["house_cost"] // 2  # Bank oddaje 50% wartości budynku
-                mortgaged_tag = " [MORTGAGED]" if prop.get("is_mortgaged", False) else ""
+                mortgaged_tag = (
+                    " [MORTGAGED]" if prop.get("is_mortgaged", False) else ""
+                )
                 print(
                     f"{index}. {prop['name']}{mortgaged_tag} | Status: {status} | Sell price: ${refund}"
                 )

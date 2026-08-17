@@ -674,3 +674,155 @@ class TestTaxAndDispatch:
         target = find_field(field_id)
         engine.handle_field_action(p1, target, 7, [p1, p2])
         assert p1["budget"] == 1500
+
+
+# ============================================================
+# System długu / bankructwa
+# ============================================================
+class TestCheckAndFlagDebt:
+    def test_sets_flag_and_creditor_when_negative(self, p1, p2):
+        p1["budget"] = -30
+
+        result = engine.check_and_flag_debt(p1, creditor=p2)
+
+        assert result is True
+        assert p1["is_in_debt"] is True
+        assert p1["creditor"] is p2
+
+    def test_clears_flag_and_creditor_when_non_negative(self, p1, p2):
+        p1["is_in_debt"] = True
+        p1["creditor"] = p2
+        p1["budget"] = 0
+
+        result = engine.check_and_flag_debt(p1, creditor=None)
+
+        assert result is False
+        assert p1["is_in_debt"] is False
+        assert p1["creditor"] is None
+
+
+class TestGetPlayerLiquidationValue:
+    def test_includes_budget_houses_and_unmortgaged_properties(self, p1, find_field):
+        konopacka = find_field("ulica_konopacka")  # price 60, house_cost 50
+        stalowa = find_field("ulica_stalowa")  # price 60, house_cost 50
+        konopacka["owner"] = p1
+        stalowa["owner"] = p1
+        konopacka["houses"] = 2
+        p1["properties"] = [konopacka, stalowa]
+        p1["budget"] = -100
+
+        # domki: 2 * 50 // 2 = 50 | działki: 60 // 2 + 60 // 2 = 60 | razem z budżetem: -100 + 50 + 60 = 10
+        assert engine.get_player_liquidation_value(p1) == 10
+
+    def test_excludes_mortgaged_properties(self, p1, find_field):
+        konopacka = find_field("ulica_konopacka")
+        konopacka["owner"] = p1
+        konopacka["is_mortgaged"] = True
+        p1["properties"] = [konopacka]
+        p1["budget"] = -10
+
+        assert engine.get_player_liquidation_value(p1) == -10
+
+
+class TestCanSellHouse:
+    def test_true_when_matches_group_max(self, find_field):
+        konopacka = find_field("ulica_konopacka")
+        find_field("ulica_stalowa")["houses"] = 1
+        konopacka["houses"] = 2
+
+        assert engine.can_sell_house(konopacka) is True
+
+    def test_false_when_below_group_max(self, find_field):
+        konopacka = find_field("ulica_konopacka")
+        find_field("ulica_stalowa")["houses"] = 2
+        konopacka["houses"] = 1
+
+        assert engine.can_sell_house(konopacka) is False
+
+    def test_false_without_any_houses(self, find_field):
+        konopacka = find_field("ulica_konopacka")
+
+        assert engine.can_sell_house(konopacka) is False
+
+
+class TestDebtRecheckOnIncome:
+    """Blokuje regresję: dochód powinien odświeżać, a nie ignorować wcześniejszy dług."""
+
+    def test_award_go_bonus_clears_stale_debt(self, p1):
+        p1["budget"] = -50
+        engine.check_and_flag_debt(p1, creditor=None)
+
+        engine.award_go_bonus(p1)
+
+        assert p1["budget"] == 150
+        assert p1["is_in_debt"] is False
+
+    def test_rent_clears_owners_stale_debt(self, p1, p2, find_field):
+        konopacka = find_field("ulica_konopacka")  # base_rent 2
+        konopacka["owner"] = p1
+        p1["properties"] = [konopacka]
+        p1["budget"] = -1
+        engine.check_and_flag_debt(p1, creditor=None)
+
+        engine.handle_property(p2, konopacka)
+
+        assert p1["is_in_debt"] is False  # czynsz ($2) spłacił dług właściciela
+
+    def test_rent_leaves_owner_partially_in_debt(self, p1, p2, find_field):
+        konopacka = find_field("ulica_konopacka")  # base_rent 2
+        konopacka["owner"] = p1
+        p1["properties"] = [konopacka]
+        p1["budget"] = -100
+        engine.check_and_flag_debt(p1, creditor=None)
+
+        engine.handle_property(p2, konopacka)
+
+        assert p1["is_in_debt"] is True  # $2 czynszu nie pokrywa $100 długu
+
+    def test_payer_debt_flagged_with_owner_as_creditor(self, p1, p2, find_field):
+        konopacka = find_field("ulica_konopacka")  # base_rent 2
+        konopacka["owner"] = p1
+        p1["properties"] = [konopacka]
+        p2["budget"] = 1  # mniej niż czynsz
+
+        engine.handle_property(p2, konopacka)
+
+        assert p2["is_in_debt"] is True
+        assert p2["creditor"] is p1
+
+    def test_chance_pay_players_clears_recipients_stale_debt(self, p1, p2):
+        p2["budget"] = -10
+        engine.check_and_flag_debt(p2, creditor=None)
+
+        engine.handle_chance_pay_players(p1, {"amount": 50}, [p1, p2])
+
+        assert p2["budget"] == 40
+        assert p2["is_in_debt"] is False
+
+    def test_collect_from_players_clears_collectors_stale_debt(self, p1, p2):
+        p1["budget"] = -10
+        engine.check_and_flag_debt(p1, creditor=None)
+
+        engine.handle_community_chest_collect_from_players(p1, {"amount": 50}, [p1, p2])
+
+        assert p1["budget"] == 40
+        assert p1["is_in_debt"] is False
+
+    def test_card_bank_money_preserves_creditor_on_positive_amount(self, p1, p2):
+        p1["budget"] = -100
+        engine.check_and_flag_debt(p1, creditor=p2)
+
+        engine.handle_card_bank_money(p1, {"amount": 30})
+
+        assert p1["budget"] == -70
+        assert p1["is_in_debt"] is True
+        assert p1["creditor"] is p2  # NIE nadpisane na Bank
+
+    def test_card_bank_money_sets_bank_creditor_on_negative_amount(self, p1):
+        p1["budget"] = 10
+
+        engine.handle_card_bank_money(p1, {"amount": -30})
+
+        assert p1["budget"] == -20
+        assert p1["is_in_debt"] is True
+        assert p1["creditor"] is None

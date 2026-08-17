@@ -18,6 +18,8 @@ def reset_game(player1, player2, bank):
         p["in_jail"] = False
         p["jail_turns"] = 0
         p["double_count"] = 0
+        p["is_in_debt"] = False
+        p["creditor"] = None
 
     # 2. Reset stanu Banku
     bank["houses"] = 32
@@ -49,6 +51,44 @@ def passed_start(old_position, new_position):
 
 def award_go_bonus(player):
     player["budget"] += GO_BONUS
+    # Bonus może spłacić wcześniejszy dług, więc odświeżamy flagę
+    check_and_flag_debt(player, creditor=player.get("creditor"))
+
+
+def check_and_flag_debt(player, creditor=None):
+    if player["budget"] < 0:
+        player["is_in_debt"] = True
+        player["creditor"] = creditor
+
+        debt_amount = abs(player["budget"])
+        creditor_name = creditor["name"] if creditor else "Bank"
+        print(
+            f"⚠️ DEBT DETECTED! {player['name']} is in debt: -${debt_amount} | Owed to: {creditor_name}"
+        )
+        return True
+    else:
+        player["is_in_debt"] = False
+        player["creditor"] = None
+        return False
+
+
+def get_player_liquidation_value(player):
+    # 1. 50% wartości ze sprzedaży wszystkich domków i hoteli
+    total_building_value = sum(
+        (p.get("houses", 0) * p["house_cost"]) // 2
+        for p in player["properties"]
+        if p.get("houses", 0) > 0
+    )
+
+    # 2. 50% wartości zakupu z zastawienia niezastawionych działek
+    total_properties_value = sum(
+        p["price"] // 2
+        for p in player["properties"]
+        if not p.get("is_mortgaged", False)
+    )
+
+    # Zwraca łączny bilans (ujemny budżet + maksymalna gotówka z wyprzedaży)
+    return player["budget"] + total_building_value + total_properties_value
 
 
 # Ruszanie graczy po planszy
@@ -234,6 +274,17 @@ def build_house(player, field, bank):
         )
 
 
+def can_sell_house(field):
+    # Zasada równomiernego sprzedawania (Even Selling Rule): sprzedawać można
+    # wyłącznie z ulic posiadających najwięcej budynków w danej grupie kolorystycznej
+    houses = field.get("houses", 0)
+    if houses <= 0:
+        return False
+    group_props = get_group_properties(field["group"])
+    max_houses = max(f.get("houses", 0) for f in group_props)
+    return houses == max_houses
+
+
 def sell_house(player, field, bank):
     group_name = field["group"]
     current_houses = field.get("houses", 0)
@@ -244,12 +295,10 @@ def sell_house(player, field, bank):
         return
 
     # 2. Zasada równomiernego sprzedawania (Even Selling Rule)
-    # Szukamy MAKSYMALNEJ liczby budynków w całej grupie kolorystycznej
-    group_props = get_group_properties(group_name)
-    max_houses = max(f.get("houses", 0) for f in group_props)
-
-    # Sprzedawać można wyłącznie z ulic posiadających najwięcej budynków
-    if current_houses < max_houses:
+    if not can_sell_house(field):
+        max_houses = max(
+            f.get("houses", 0) for f in get_group_properties(group_name)
+        )
         print(
             f"❌ You must sell evenly! Sell from properties with {max_houses} building(s) in {group_name.upper()} first."
         )
@@ -358,14 +407,14 @@ def handle_property(player, field):
 
         houses = field.get("houses", 0)
 
-        # 1. Jeśli na ulicy stoją budynki (1-4 domki lub 5 = hotel)
+        # 3. Jeśli na ulicy stoją budynki (1-4 domki lub 5 = hotel)
         if houses > 0:
             rent = field["house_rents"][houses - 1]
             print(
                 f"🏠 {player['name']} landed on {owner['name']}'s property with {houses} building(s)!"
             )
 
-        # 2. Jeśli nie ma budynków, ale właściciel ma MONOPOL -> Podwójny czynsz
+        # 4. Jeśli nie ma budynków, ale właściciel ma MONOPOL -> Podwójny czynsz
         # (mortgage nie odbiera własności, więc nie przerywa monopolu na potrzeby tej reguły)
         elif has_monopoly(owner, field["group"]):
             rent = field.get("base_rent") * 2
@@ -373,7 +422,7 @@ def handle_property(player, field):
                 f"👑 {owner['name']} has a MONOPOLY on {field['group']}! Rent is doubled."
             )
 
-        # 3. Zwykły czynsz bazowy
+        # 5. Zwykły czynsz bazowy
         else:
             rent = field.get("base_rent")
 
@@ -383,7 +432,12 @@ def handle_property(player, field):
         player["budget"] -= rent
         owner["budget"] += rent
 
-    # WARUNEK 3: Nieruchomość na sprzedaż
+        # 🚨 DETEKCJA DŁUGU (wierzycielem jest owner)
+        check_and_flag_debt(player, creditor=owner)
+        # Czynsz mógł spłacić wcześniejszy dług właściciela, więc odświeżamy jego flagę
+        check_and_flag_debt(owner, creditor=owner.get("creditor"))
+
+    # WARUNEK 6: Nieruchomość na sprzedaż
     else:
         print(f"🏷️ {field['name']} is for sale for ${field['price']}!")
         attempt_purchase(player, field)
@@ -428,6 +482,11 @@ def handle_station(player, field, multiplier=1):
 
         player["budget"] -= rent
         owner["budget"] += rent
+
+        # 🚨 DETEKCJA DŁUGU (wierzycielem jest owner)
+        check_and_flag_debt(player, creditor=owner)
+        # Czynsz mógł spłacić wcześniejszy dług właściciela, więc odświeżamy jego flagę
+        check_and_flag_debt(owner, creditor=owner.get("creditor"))
     # WARUNEK 3: Stacja na sprzedaż
     else:
         print(f"🏷️ {field['name']} is for sale for ${field['price']}!")
@@ -471,6 +530,11 @@ def handle_company(player, field, dice_total, custom_multiplier=None):
 
         player["budget"] -= rent
         owner["budget"] += rent
+
+        # 🚨 DETEKCJA DŁUGU (wierzycielem jest owner)
+        check_and_flag_debt(player, creditor=owner)
+        # Czynsz mógł spłacić wcześniejszy dług właściciela, więc odświeżamy jego flagę
+        check_and_flag_debt(owner, creditor=owner.get("creditor"))
     # WARUNEK 3: Firma na sprzedaż
     else:
         print(f"💡 {field['name']} is for sale for ${field['price']}!")
@@ -479,8 +543,11 @@ def handle_company(player, field, dice_total, custom_multiplier=None):
 
 def handle_tax(player, field):
     tax_amount = field.get("tax")
-
     player["budget"] -= tax_amount
+
+    # 🚨 DETEKCJA DŁUGU (wierzycielem jest Bank)
+    check_and_flag_debt(player, creditor=None)
+
     print(
         f"{player['name']} paid tax ({field['name']}): - ${tax_amount}. Remaining budget: ${player['budget']}"
     )
@@ -495,6 +562,13 @@ def handle_tax(player, field):
 def handle_card_bank_money(player, card):
     amount = card["amount"]
     player["budget"] += amount
+
+    if amount < 0:
+        # Nowa opłata na rzecz Banku - to on jest wierzycielem ewentualnego długu
+        check_and_flag_debt(player, creditor=None)
+    else:
+        # Wpływ mógł spłacić wcześniejszy dług - zachowujemy dotychczasowego wierzyciela
+        check_and_flag_debt(player, creditor=player.get("creditor"))
 
     if amount > 0:
         print(
@@ -560,8 +634,10 @@ def handle_chance_pay_players(player, card, all_players):
         if opponent is not player:
             player["budget"] -= amount
             opponent["budget"] += amount
-
             print(f"💸 {player['name']} pays to {opponent['name']} ${amount}!")
+            check_and_flag_debt(player, creditor=opponent)
+            # Otrzymana kwota mogła spłacić wcześniejszy dług przeciwnika
+            check_and_flag_debt(opponent, creditor=opponent.get("creditor"))
 
 
 def handle_card_keep_jail_card(player, card, deck):
@@ -652,6 +728,8 @@ def handle_card_property_repairs(player, card):
         f"🛠️ {player['name']} paid ${total_cost} for property repairs ({total_houses} houses, {total_hotels} hotels)."
     )
 
+    check_and_flag_debt(player, creditor=None)
+
 
 def handle_community_chest_collect_from_players(player, card, all_players):
     amount = card["amount"]
@@ -660,8 +738,11 @@ def handle_community_chest_collect_from_players(player, card, all_players):
         if opponent is not player:
             player["budget"] += amount
             opponent["budget"] -= amount
-
             print(f"🎁 {player['name']} collects ${amount} from {opponent['name']}!")
+
+            check_and_flag_debt(opponent, creditor=player)
+            # Otrzymana kwota mogła spłacić wcześniejszy dług gracza
+            check_and_flag_debt(player, creditor=player.get("creditor"))
 
     print(f"💰 {player['name']}'s current budget: ${player['budget']}.")
 

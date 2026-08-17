@@ -7,6 +7,82 @@ BOARD_SIZE = 40
 GO_BONUS = 200
 
 
+def execute_bankruptcy(bankrupt_player, all_players, bank):
+    creditor = bankrupt_player.get("creditor")
+    inherited_mortgaged_props = []
+
+    # 1. PRZYMUSOWA LIKWIDACJA BUDYNKÓW (Oddanie do Banku za 50%)
+    for prop in bankrupt_player["properties"]:
+        houses = prop.get("houses", 0)
+        if houses > 0:
+            refund = houses * (prop["house_cost"] // 2)
+            prop["houses"] = 0
+
+            if houses == 5:
+                bank["hotels"] += 1
+            else:
+                bank["houses"] += houses
+
+            bankrupt_player["budget"] += refund
+            print(
+                f"🏚️ Bank auto-liquidates {houses} building(s) on {prop['name']} for ${refund}."
+            )
+
+    # 2. PRZEKAZANIE MAJĄTKU
+    if creditor is not None:
+        print(
+            f"\n🏛️ {bankrupt_player['name']} went BANKRUPT! Assets go to {creditor['name']}."
+        )
+
+        for held_card in bankrupt_player["jail_cards_held"]:
+            creditor["jail_cards_held"].append(held_card)
+            creditor["jail_cards_count"] += 1
+            print(f"   🎟️ {creditor['name']} receives a 'Get Out of Jail Free' card")
+
+        for prop in bankrupt_player["properties"]:
+            prop["owner"] = creditor
+            creditor["properties"].append(prop)
+
+            # ZASADA 10% OD HIPOTEKI
+            if prop.get("is_mortgaged", False):
+                mortgage_value = prop["price"] // 2
+                tax_10_percent = int(mortgage_value * 0.1)
+                creditor["budget"] -= tax_10_percent
+                print(
+                    f"   ⚠️ {creditor['name']} receives {prop['name']} [MORTGAGED] and paid 10% tax (${tax_10_percent})."
+                )
+
+                # Dodajemy do listy, aby zapytać o natychmiastowe zdjęcie hipoteki
+                inherited_mortgaged_props.append(prop)
+            else:
+                print(f"   🏠 {creditor['name']} receives {prop['name']}")
+
+        bankrupt_player["budget"] = 0
+        check_and_flag_debt(creditor, creditor=None)
+
+    else:
+        # ZBANKRUTOWAŁ NA RZECZ BANKU
+        print(
+            f"\n🏛️ {bankrupt_player['name']} went bankrupt to the Bank. Assets are returning to the market!"
+        )
+        for prop in bankrupt_player["properties"]:
+            prop["owner"] = None
+            prop["is_mortgaged"] = False
+            print(f"   🏷️ {prop['name']} is now free to buy again")
+
+        for held_card in bankrupt_player["jail_cards_held"]:
+            held_card["deck"].append(held_card["card"])
+
+    # Wyczyść i usuń gracza
+    bankrupt_player["properties"].clear()
+    bankrupt_player["jail_cards_held"].clear()
+    all_players.remove(bankrupt_player)
+    print(f"\n👋 {bankrupt_player['name']} has been eliminated from the game!\n")
+
+    # Zwracamy wierzyciela i listę zastawionych ulic (jeśli istnieją)
+    return creditor, inherited_mortgaged_props
+
+
 def reset_game(player1, player2, bank):
     # 1. Reset stanu graczy
     for p in [player1, player2]:
@@ -296,9 +372,7 @@ def sell_house(player, field, bank):
 
     # 2. Zasada równomiernego sprzedawania (Even Selling Rule)
     if not can_sell_house(field):
-        max_houses = max(
-            f.get("houses", 0) for f in get_group_properties(group_name)
-        )
+        max_houses = max(f.get("houses", 0) for f in get_group_properties(group_name))
         print(
             f"❌ You must sell evenly! Sell from properties with {max_houses} building(s) in {group_name.upper()} first."
         )

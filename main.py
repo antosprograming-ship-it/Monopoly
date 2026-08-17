@@ -96,13 +96,17 @@ def handle_computer_debt_resolution(player):
         print(f"\n💀 {player['name']} cannot cover the debt and is BANKRUPT!")
 
 
-def handle_debt_menu(player):
+def handle_debt_menu(player, all_players):
     # 1. KROK SZYBKIEGO BANKRUCTWA:
-    # Sprawdzamy, czy gracz ma w ogóle matematyczną możliwość spłaty długu
     if engine.get_player_liquidation_value(player) < 0:
-        print(f"\n💀 {player['name']} cannot cover the debt and is BANKRUPT!")
-        # TUTAJ w przyszłości podepniemy przekazanie majątku i koniec gry
-        return
+        creditor, inherited_props = engine.execute_bankruptcy(
+            player, all_players, models.bank
+        )
+
+        if creditor and inherited_props:
+            handle_inherited_mortgages(creditor, inherited_props)
+
+        return "BANKRUPT"
 
     # 2. PĘTLIA RATUNKOWA:
     # Jeśli wycena majątku >= 0, gracz MOŻE wyjść z długu, więc dajemy mu wybór
@@ -136,6 +140,66 @@ def handle_debt_menu(player):
             print("❌ You must resolve your debt first! Choose 'sell' or 'mortgage'.")
 
         engine.check_and_flag_debt(player, creditor=player.get("creditor"))
+
+
+def handle_inherited_mortgages(creditor, inherited_props):
+    if not inherited_props:
+        return
+
+    print(f"\n=== MORTGAGE RESOLUTION FOR {creditor['name'].upper()} ===")
+
+    for prop in inherited_props:
+        principal = prop["price"] // 2
+
+        # Jeśli wierzyciel to AI (Komputer)
+        if creditor["name"] == "Computer":
+            # Komputer zdejmuje hipotekę od razu, jeśli zostanie mu bezpieczny bufor gotówki (np. $200)
+            if creditor["budget"] >= principal + 200:
+                creditor["budget"] -= principal
+                prop["is_mortgaged"] = False
+                print(
+                    f"🤖 Computer decided to instantly unmortgage {prop['name']} for ${principal}."
+                )
+            else:
+                print(f"🤖 Computer leaves {prop['name']} mortgaged.")
+            continue
+
+        # Jeśli wierzyciel to żywy gracz (Ty)
+        while True:
+            print(f"\n🏷️ You inherited {prop['name']} [MORTGAGED].")
+            print(f"   You already paid the 10% tax.")
+            print(
+                f"   Do you want to pay the principal (${principal}) to unmortgage it NOW?"
+            )
+            print(
+                f"   (If you wait, it will cost you principal + ANOTHER 10% later: ${engine.calculate_unmortgage_value(prop)})"
+            )
+
+            choice = (
+                input(f"Unmortgage {prop['name']} for ${principal}? (y/n): ")
+                .strip()
+                .lower()
+            )
+
+            if choice == "y":
+                if creditor["budget"] >= principal:
+                    creditor["budget"] -= principal
+                    prop["is_mortgaged"] = False
+                    print(
+                        f"✅ You unmortgaged {prop['name']}! Current budget: ${creditor['budget']}"
+                    )
+                    break
+                else:
+                    print(
+                        f"❌ You only have ${creditor['budget']}. You cannot afford this now."
+                    )
+                    print(f"   {prop['name']} remains mortgaged.")
+                    break
+            elif choice == "n":
+                print(f"   {prop['name']} remains mortgaged.")
+                break
+            else:
+                print("❌ Invalid input. Type 'y' or 'n'.")
 
 
 def handle_jail_turn(player, all_players):

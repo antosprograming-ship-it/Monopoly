@@ -53,15 +53,10 @@ def print_player_status(player):
 
 
 def get_sellable_property(player):
-    # Zwraca pierwszą napotkaną nieruchomość, którą można legalnie sprzedać.
-    # Hotel pomijamy, jeśli Bank nie ma 4 domków potrzebnych do jego zejścia
-    # (inaczej sell_house odrzuciłby sprzedaż i pętla AI utknęłaby w miejscu).
+    # Zwraca pierwszą napotkaną nieruchomość, którą można legalnie sprzedać
     for prop in player["properties"]:
-        if not engine.can_sell_house(prop):
-            continue
-        if prop.get("houses", 0) == 5 and models.bank["houses"] < 4:
-            continue
-        return prop
+        if engine.can_sell_house(prop):
+            return prop
     return None
 
 
